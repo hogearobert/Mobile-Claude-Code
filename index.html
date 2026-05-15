@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Neon Dash</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <div id="hud">
+      <div class="hud-row">
+        <div class="badge">
+          <span class="label">SCOR</span>
+          <span id="score">0</span>
+        </div>
+        <div class="badge">
+          <span class="label">RECORD</span>
+          <span id="best">0</span>
+        </div>
+        <div class="badge coins">
+          <span class="label">★</span>
+          <span id="coins">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay" class="overlay show">
+      <div class="panel">
+        <h1 class="title">NEON<br/>DASH</h1>
+        <p class="sub">Tap pentru a sări. Tap dublu pentru salt dublu.<br/>Colectează stelele, evită obstacolele.</p>
+        <button id="startBtn" class="btn">JOACĂ</button>
+        <p class="hint">Funcționează offline. Adaugă pe ecran principal pentru experiență full-screen.</p>
+      </div>
+    </div>
+
+    <div id="gameover" class="overlay">
+      <div class="panel">
+        <h1 class="title small">GAME OVER</h1>
+        <div class="stats">
+          <div><span class="label">Scor</span><span id="finalScore">0</span></div>
+          <div><span class="label">Record</span><span id="finalBest">0</span></div>
+          <div><span class="label">Stele</span><span id="finalCoins">0</span></div>
+        </div>
+        <button id="retryBtn" class="btn">REJOACĂ</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
