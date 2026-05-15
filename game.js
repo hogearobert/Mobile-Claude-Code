@@ -35,9 +35,11 @@
     canvas.style.height = vh + 'px';
     const scale = (vw / W) * DPR;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    if (typeof player !== 'undefined' && state !== STATE.PLAY) {
-      player.y = GROUND - player.h;
-    }
+    try {
+      if (state !== STATE.PLAY && player) {
+        player.y = GROUND - player.h;
+      }
+    } catch (_) { /* called before state/player are defined */ }
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 150));
