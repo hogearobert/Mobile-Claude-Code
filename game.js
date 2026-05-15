@@ -26,7 +26,6 @@
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    // Maintain world width = W; let height adapt to aspect.
     const aspect = vw / vh;
     H = Math.round(W / aspect);
     GROUND = H - 110;
@@ -34,11 +33,14 @@
     canvas.height = Math.round(vh * DPR);
     canvas.style.width = vw + 'px';
     canvas.style.height = vh + 'px';
-    // Scale so 1 world unit = (vw / W) css pixels, then DPR.
     const scale = (vw / W) * DPR;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    if (typeof player !== 'undefined' && state !== STATE.PLAY) {
+      player.y = GROUND - player.h;
+    }
   }
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 150));
   resize();
 
   // ---------- Game state ----------
@@ -82,6 +84,8 @@
   let nextObstacleAt = 60;
   let nextCoinAt = 90;
   let shake = 0;
+  let lastJumpFrame = -100;
+  let inputGraceUntil = 0;
 
   // ---------- Init parallax ----------
   function initParallax() {
@@ -136,29 +140,32 @@
     nextObstacleAt = 60;
     nextCoinAt = 90;
     shake = 0;
-    scoreEl.textContent = 0;
+    lastJumpFrame = -100;
+    inputGraceUntil = 15;
+    scoreEl.textContent = '0';
     coinsEl.textContent = totalCoins;
     initParallax();
   }
 
   function jump() {
     if (state !== STATE.PLAY) return;
-    if (player.jumps < player.maxJumps) {
-      player.vy = jumpV * (player.jumps === 0 ? 1 : 0.85);
-      player.onGround = false;
-      player.jumps++;
-      // burst particles
-      for (let i = 0; i < 10; i++) {
-        particles.push({
-          x: player.x + player.w / 2,
-          y: player.y + player.h,
-          vx: (Math.random() - 0.5) * 4,
-          vy: Math.random() * 3 + 1,
-          life: 24,
-          color: player.jumps === 1 ? '#19f0ff' : '#ff3df0',
-          r: Math.random() * 3 + 1
-        });
-      }
+    if (frame < inputGraceUntil) return;
+    if (frame - lastJumpFrame < 3) return;
+    if (player.jumps >= player.maxJumps) return;
+    lastJumpFrame = frame;
+    player.vy = jumpV * (player.jumps === 0 ? 1 : 0.85);
+    player.onGround = false;
+    player.jumps++;
+    for (let i = 0; i < 10; i++) {
+      particles.push({
+        x: player.x + player.w / 2,
+        y: player.y + player.h,
+        vx: (Math.random() - 0.5) * 4,
+        vy: Math.random() * 3 + 1,
+        life: 24,
+        color: player.jumps === 1 ? '#19f0ff' : '#ff3df0',
+        r: Math.random() * 3 + 1
+      });
     }
   }
 
@@ -183,7 +190,7 @@
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
     finalCoinsEl.textContent = '+' + runCoins;
-    setTimeout(() => gameoverEl.classList.add('show'), 600);
+    setTimeout(() => gameoverEl.classList.add('show'), 280);
     // explosion
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -211,6 +218,7 @@
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'ArrowUp') {
       e.preventDefault();
+      if (e.repeat) return;
       if (state === STATE.MENU) startGame();
       else if (state === STATE.OVER) startGame();
       else jump();
@@ -270,10 +278,14 @@
     if (player.y + player.h >= GROUND) {
       player.y = GROUND - player.h;
       player.vy = 0;
+      if (!player.onGround) {
+        lastJumpFrame = -100;
+      }
       player.onGround = true;
       player.jumps = 0;
       player.rot = 0;
     } else {
+      player.onGround = false;
       player.rot += 0.15;
     }
 
@@ -344,11 +356,11 @@
     });
     particles = particles.filter((p) => p.life > 0);
 
-    // Collisions
-    const px = player.x + 6;
-    const py = player.y + 6;
-    const pw = player.w - 12;
-    const ph = player.h - 10;
+    // Collisions (generous to player — feels fair)
+    const px = player.x + 10;
+    const py = player.y + 8;
+    const pw = player.w - 20;
+    const ph = player.h - 12;
 
     for (const o of obstacles) {
       if (px < o.x + o.w && px + pw > o.x && py < o.y + o.h && py + ph > o.y) {
@@ -664,16 +676,37 @@
     ctx.restore();
   }
 
-  // ---------- Main loop ----------
+  function updateOver() {
+    particles.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15;
+      p.life--;
+    });
+    particles = particles.filter((p) => p.life > 0);
+    if (shake > 0) shake *= 0.9;
+  }
+
+  // ---------- Main loop (fixed-step physics, decoupled from refresh rate) ----------
+  const FIXED_DT = 1000 / 60;
   let last = performance.now();
+  let accumulator = 0;
   function loop(now) {
-    const dt = now - last;
+    let dt = now - last;
     last = now;
-    if (state === STATE.PLAY) update();
+    if (dt > 250) dt = 250;
+    accumulator += dt;
+    let steps = 0;
+    while (accumulator >= FIXED_DT && steps < 5) {
+      if (state === STATE.PLAY) update();
+      else if (state === STATE.OVER) updateOver();
+      accumulator -= FIXED_DT;
+      steps++;
+    }
+    if (steps === 5) accumulator = 0;
     draw();
     requestAnimationFrame(loop);
   }
-  // Initial idle render
   player.y = GROUND - player.h;
   requestAnimationFrame(loop);
 
