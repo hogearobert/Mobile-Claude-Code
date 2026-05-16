@@ -1,7 +1,7 @@
 {
-  "name": "Neon Dash",
-  "short_name": "Neon Dash",
-  "description": "Endless runner neon — sari, colectează stele, evită obstacolele.",
+  "name": "Glitch Run",
+  "short_name": "Glitch Run",
+  "description": "Endless runner synthwave — sari, colectează stele, evită obstacolele.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
