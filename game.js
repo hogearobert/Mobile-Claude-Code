@@ -3,6 +3,74 @@
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+
+  // ---------- Audio (procedural Web Audio, no asset files) ----------
+  const audio = (() => {
+    let ac, master;
+    let muted = localStorage.getItem('neon-dash-mute') === '1';
+    function ensure() {
+      if (ac) return ac;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ac = new AC();
+        master = ac.createGain();
+        master.gain.value = 0.35;
+        master.connect(ac.destination);
+      } catch (_) {}
+      return ac;
+    }
+    function blip(freq, dur, type, vol, slide) {
+      if (muted) return;
+      const c = ensure();
+      if (!c) return;
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = type || 'square';
+      o.frequency.setValueAtTime(freq, c.currentTime);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(1, slide), c.currentTime + dur);
+      g.gain.setValueAtTime(0, c.currentTime);
+      g.gain.linearRampToValueAtTime(vol || 0.25, c.currentTime + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+      o.connect(g).connect(master);
+      o.start();
+      o.stop(c.currentTime + dur + 0.02);
+    }
+    function noise(dur, vol, lp) {
+      if (muted) return;
+      const c = ensure();
+      if (!c) return;
+      const buf = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      const g = c.createGain();
+      g.gain.value = vol || 0.4;
+      const f = c.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = lp || 2000;
+      src.connect(f).connect(g).connect(master);
+      src.start();
+    }
+    return {
+      resume() { const c = ensure(); if (c && c.state === 'suspended') c.resume(); },
+      jump() { blip(420, 0.12, 'square', 0.22, 760); },
+      djump() { blip(620, 0.14, 'sawtooth', 0.2, 1100); },
+      coin() { blip(880, 0.06, 'sine', 0.25); setTimeout(() => blip(1320, 0.1, 'sine', 0.22), 50); },
+      hit() { noise(0.35, 0.5, 1200); blip(110, 0.4, 'sawtooth', 0.35, 55); },
+      over() {
+        blip(440, 0.18, 'sawtooth', 0.28);
+        setTimeout(() => blip(330, 0.18, 'sawtooth', 0.28), 130);
+        setTimeout(() => blip(220, 0.5, 'sawtooth', 0.3, 110), 260);
+      },
+      toggle() {
+        muted = !muted;
+        localStorage.setItem('neon-dash-mute', muted ? '1' : '0');
+        return muted;
+      },
+      isMuted: () => muted
+    };
+  })();
   const overlay = document.getElementById('overlay');
   const gameoverEl = document.getElementById('gameover');
   const startBtn = document.getElementById('startBtn');
@@ -46,7 +114,7 @@
   resize();
 
   // ---------- Game state ----------
-  const STATE = { MENU: 0, PLAY: 1, OVER: 2 };
+  const STATE = { MENU: 0, PLAY: 1, OVER: 2, PAUSED: 3 };
   let state = STATE.MENU;
 
   let best = parseInt(localStorage.getItem('neon-dash-best') || '0', 10);
@@ -158,6 +226,7 @@
     player.vy = jumpV * (player.jumps === 0 ? 1 : 0.85);
     player.onGround = false;
     player.jumps++;
+    if (player.jumps === 1) audio.jump(); else audio.djump();
     for (let i = 0; i < 10; i++) {
       particles.push({
         x: player.x + player.w / 2,
@@ -181,6 +250,9 @@
   function gameOver() {
     state = STATE.OVER;
     shake = 18;
+    audio.hit();
+    setTimeout(() => audio.over(), 220);
+    if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
     if (score > best) {
       best = score;
       localStorage.setItem('neon-dash-best', best);
@@ -212,6 +284,7 @@
   // ---------- Input ----------
   function onTap(e) {
     if (e.cancelable) e.preventDefault();
+    audio.resume();
     if (state === STATE.MENU) return;
     if (state === STATE.OVER) return;
     jump();
@@ -226,15 +299,25 @@
       else jump();
     }
   });
-  startBtn.addEventListener('click', startGame);
-  retryBtn.addEventListener('click', startGame);
+  startBtn.addEventListener('click', () => { audio.resume(); startGame(); });
+  retryBtn.addEventListener('click', () => { audio.resume(); startGame(); });
+
+  const muteBtn = document.getElementById('muteBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  function refreshMuteIcon() { if (muteBtn) muteBtn.textContent = audio.isMuted() ? '🔇' : '🔊'; }
+  refreshMuteIcon();
+  if (muteBtn) muteBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.resume(); audio.toggle(); refreshMuteIcon(); });
+  if (pauseBtn) pauseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; }
+    else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 8; }
+  });
 
   // ---------- Spawning ----------
   function spawnObstacle() {
     const types = ['spike', 'block', 'tall', 'flying'];
     let t = types[Math.floor(Math.random() * types.length)];
-    // Avoid flying too early
-    if (score < 20 && t === 'flying') t = 'block';
+    if (score < 150 && t === 'flying') t = 'spike';
 
     if (t === 'spike') {
       obstacles.push({ type: t, x: W + 20, y: GROUND - 30, w: 36, h: 30 });
@@ -377,6 +460,7 @@
         c.picked = true;
         runCoins++;
         score += 5;
+        audio.coin();
         // sparkle
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * Math.PI * 2;
@@ -401,13 +485,17 @@
   }
 
   // ---------- Draw ----------
+  let skyGradient = null;
+  let skyGradientH = -1;
   function drawBackground() {
-    // Gradient sky
-    const grd = ctx.createLinearGradient(0, 0, 0, H);
-    grd.addColorStop(0, '#0a0e2a');
-    grd.addColorStop(0.6, '#1a0a2e');
-    grd.addColorStop(1, '#2a0a3a');
-    ctx.fillStyle = grd;
+    if (skyGradientH !== H) {
+      skyGradient = ctx.createLinearGradient(0, 0, 0, H);
+      skyGradient.addColorStop(0, '#0a0e2a');
+      skyGradient.addColorStop(0.6, '#1a0a2e');
+      skyGradient.addColorStop(1, '#2a0a3a');
+      skyGradientH = H;
+    }
+    ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, W, H);
 
     // Stars
@@ -694,19 +782,23 @@
   let last = performance.now();
   let accumulator = 0;
   function loop(now) {
-    let dt = now - last;
-    last = now;
-    if (dt > 250) dt = 250;
-    accumulator += dt;
-    let steps = 0;
-    while (accumulator >= FIXED_DT && steps < 5) {
-      if (state === STATE.PLAY) update();
-      else if (state === STATE.OVER) updateOver();
-      accumulator -= FIXED_DT;
-      steps++;
+    try {
+      let dt = now - last;
+      last = now;
+      if (dt > 250) dt = 250;
+      accumulator += dt;
+      let steps = 0;
+      while (accumulator >= FIXED_DT && steps < 5) {
+        if (state === STATE.PLAY) update();
+        else if (state === STATE.OVER) updateOver();
+        accumulator -= FIXED_DT;
+        steps++;
+      }
+      if (steps === 5) accumulator = 0;
+      draw();
+    } catch (err) {
+      console.error('[Neon Dash] loop error:', err);
     }
-    if (steps === 5) accumulator = 0;
-    draw();
     requestAnimationFrame(loop);
   }
   player.y = GROUND - player.h;
