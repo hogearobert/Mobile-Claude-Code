@@ -748,6 +748,33 @@ html, body {
   box-shadow: 0 0 12px rgba(255, 61, 240, 0.5);
 }
 
+.btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  max-width: 260px;
+  margin: 0 auto;
+}
+.btn-stack .btn {
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+}
+.btn.primary-cta {
+  font-size: 20px;
+  padding-top: 18px;
+  padding-bottom: 18px;
+  letter-spacing: 3px;
+}
+.btn.secondary.daily {
+  font-size: 13px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  letter-spacing: 1.5px;
+  margin-top: 0;
+}
+
 .stats {
   display: flex;
   justify-content: space-around;

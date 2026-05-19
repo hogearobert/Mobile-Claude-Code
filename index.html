@@ -55,8 +55,10 @@
           </div>
         </div>
         <p class="sub">Tap pentru a sări. Tap dublu pentru salt dublu.<br/>Colectează stelele, evită obstacolele.</p>
-        <button id="startBtn" class="btn">JOACĂ</button>
-        <button id="dailyBtn" class="btn secondary">⚡ DAILY CHALLENGE</button>
+        <div class="btn-stack">
+          <button id="startBtn" class="btn primary-cta">JOACĂ</button>
+          <button id="dailyBtn" class="btn secondary daily">⚡ DAILY CHALLENGE</button>
+        </div>
         <p class="hint">Funcționează offline. Adaugă pe ecran principal pentru experiență full-screen.</p>
       </div>
     </div>
@@ -161,7 +163,7 @@
 
   </div>
 
-  <script src="game.js?v=20"></script>
+  <script src="game.js?v=21"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT
