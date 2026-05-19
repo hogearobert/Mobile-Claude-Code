@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=11" />
+  <link rel="stylesheet" href="style.css?v=12" />
 </head>
 <body>
   <div id="app">
@@ -47,6 +47,13 @@
     <div id="overlay" class="overlay show">
       <div class="panel">
         <h1 class="title">GLITCH<br/>RUN</h1>
+        <div id="streakBanner" class="streak" style="display:none">
+          <div class="streak-day"><span id="streakDay">1</span></div>
+          <div class="streak-info">
+            <div class="streak-label">BONUS ZILNIC · STREAK <span id="streakNum">1</span></div>
+            <div class="streak-reward">+<span id="streakReward">10</span> ★</div>
+          </div>
+        </div>
         <p class="sub">Tap pentru a sări. Tap dublu pentru salt dublu.<br/>Colectează stelele, evită obstacolele.</p>
         <button id="startBtn" class="btn">JOACĂ</button>
         <button id="dailyBtn" class="btn secondary">⚡ DAILY CHALLENGE</button>
@@ -68,12 +75,14 @@
 
     <div id="gameover" class="overlay">
       <div class="panel">
+        <div id="recordBadge" class="record-badge" style="display:none">⭐ RECORD NOU!</div>
         <h1 class="title small">GAME OVER</h1>
         <div class="stats">
           <div><span class="label">Scor</span><span id="finalScore">0</span></div>
           <div><span class="label">Record</span><span id="finalBest">0</span></div>
           <div><span class="label">Stele</span><span id="finalCoins">0</span></div>
         </div>
+        <p id="goalMsg" class="goal-msg"></p>
         <button id="reviveBtn" class="btn revive">▶ REVIVE GRATUIT</button>
         <p class="ad-hint">Vezi o reclamă scurtă (5s) pentru a continua</p>
         <button id="retryBtn" class="btn secondary">REJOACĂ</button>
@@ -92,7 +101,7 @@
     </div>
   </div>
 
-  <script src="game.js?v=11"></script>
+  <script src="game.js?v=12"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

@@ -138,7 +138,10 @@
     achievements: NS + 'achievements',
     runs: NS + 'runs',
     tutorial: NS + 'tutorialDone',
-    deathScores: NS + 'deathScores'
+    deathScores: NS + 'deathScores',
+    loginDate: NS + 'loginDate',
+    loginStreak: NS + 'loginStreak',
+    skinUnlocked: NS + 'skinUnlocked'
   };
   function readLS(k, dflt) { try { return localStorage.getItem(k) ?? dflt; } catch (_) { return dflt; } }
   function writeLS(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
@@ -292,6 +295,73 @@
     return 1.0;
   }
 
+  // ---------- Daily login streak (escalating reward = strong retention loop) ----------
+  const STREAK_REWARDS = [10, 20, 35, 55, 80, 120, 180, 260, 350, 450, 600, 800, 1100, 1500];
+  let streakInfo = null; // { day, reward } if reward pending this session
+  (function processLogin() {
+    const today = todayStr();
+    const prev = readLS(SK.loginDate, '');
+    let streak = parseInt(readLS(SK.loginStreak, '0'), 10) || 0;
+    if (prev === today) return; // already counted today
+    const yesterday = (function () {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate();
+    })();
+    streak = prev === yesterday ? streak + 1 : 1;
+    const reward = STREAK_REWARDS[Math.min(streak - 1, STREAK_REWARDS.length - 1)];
+    totalCoins += reward;
+    writeLS(SK.coins, totalCoins);
+    writeLS(SK.loginDate, today);
+    writeLS(SK.loginStreak, streak);
+    streakInfo = { day: streak, reward };
+  })();
+
+  // ---------- Mystery box (rare variable reward — dopamine hit) ----------
+  let mysteryBoxes = [];
+  let nextMysteryAt = 1800; // around 30s in
+  function spawnMystery() {
+    mysteryBoxes.push({
+      x: W + 30,
+      y: GROUND - 220,
+      vy: 1.6,
+      r: 26,
+      t: 0,
+      glow: 0,
+      picked: false
+    });
+  }
+  function openMystery() {
+    // Variable reward: small / medium / big with weighted probabilities
+    const r = rnd();
+    let reward;
+    if (r < 0.55) {
+      reward = { coins: 10 + Math.floor(rnd() * 15), msg: 'BONUS!', col: '#ffe14a' };
+    } else if (r < 0.85) {
+      reward = { coins: 30 + Math.floor(rnd() * 25), msg: 'MEGA BONUS!', col: '#ff3df0', extra: 'shield' };
+    } else if (r < 0.97) {
+      reward = { coins: 80 + Math.floor(rnd() * 40), msg: 'JACKPOT!', col: '#19f0ff', extra: 'magnet' };
+    } else {
+      reward = { coins: 300, msg: 'MEGA JACKPOT!!', col: '#fff' };
+    }
+    runCoins += reward.coins;
+    if (reward.extra === 'shield') shieldActive = true;
+    else if (reward.extra === 'magnet') magnetFrames = 60 * 6;
+    popText(reward.msg + ' +' + reward.coins + '★', player.x + player.w / 2, GROUND - 220, reward.col, 1.4);
+    audio.power();
+    flashFrame = frame;
+    shake = Math.max(shake, 10);
+    for (let i = 0; i < 30; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = Math.random() * 6 + 2;
+      pushParticle(
+        player.x + player.w / 2, GROUND - 220,
+        Math.cos(a) * v, Math.sin(a) * v,
+        45, reward.col, Math.random() * 3 + 2
+      );
+    }
+  }
+
   // ---------- Achievements ----------
   const ACHIEVEMENTS = [
     { id: 'first_jump',    name: 'Primul salt',         desc: 'Sari pentru prima dată' },
@@ -377,6 +447,8 @@
     nextObstacleAt = 60;
     nextCoinAt = 90;
     nextPowerupAt = 600;
+    nextMysteryAt = 1800;
+    mysteryBoxes = [];
     shake = 0;
     lastJumpFrame = -100;
     inputGraceUntil = 15;
@@ -432,10 +504,10 @@
     gameoverEl.classList.remove('show');
     reset();
     state = STATE.PLAY;
-    // Tutorial: show once for new players
+    // Tutorial: show once for new players (flag set first to avoid retrigger on reload)
     if (tutorialEl && readLS(SK.tutorial, '0') !== '1') {
-      tutorialEl.classList.add('show');
       writeLS(SK.tutorial, '1');
+      tutorialEl.classList.add('show');
       setTimeout(() => tutorialEl.classList.remove('show'), 2400);
     }
   }
@@ -446,15 +518,64 @@
     audio.hit();
     setTimeout(() => audio.over(), 220);
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
+    let newRecord = false;
+    let goalMsg = '';
     if (dailyMode) {
       if (score > dailyBest) {
         dailyBest = score;
         writeLS(SK.dailyBest, dailyBest);
+        newRecord = true;
       }
-    } else if (score > best) {
-      best = score;
-      writeLS(SK.best, best);
-      bestEl.textContent = best;
+    } else {
+      if (score > best) {
+        const prevBest = best;
+        best = score;
+        writeLS(SK.best, best);
+        bestEl.textContent = best;
+        newRecord = true;
+        if (prevBest > 0) goalMsg = '+' + (score - prevBest) + ' peste recordul anterior!';
+      } else if (best > 0) {
+        const diff = best - score;
+        if (diff <= 50) goalMsg = 'Atât de aproape! ' + diff + ' până la record';
+        else if (score > best * 0.8) goalMsg = 'Aproape de record (' + diff + ' rămase)';
+        else if (score > best * 0.5) goalMsg = best + ' este recordul tău';
+      }
+    }
+    const goalEl = document.getElementById('goalMsg');
+    if (goalEl) goalEl.textContent = goalMsg;
+    const recordBadge = document.getElementById('recordBadge');
+    if (recordBadge) recordBadge.style.display = newRecord ? 'block' : 'none';
+    if (newRecord) {
+      // confetti-like celebration particles
+      for (let i = 0; i < 60; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
+        const v = Math.random() * 10 + 4;
+        pushParticle(
+          W / 2 + (Math.random() - 0.5) * 100,
+          GROUND - 100,
+          Math.cos(a) * v, Math.sin(a) * v,
+          80,
+          ['#ffe14a', '#19f0ff', '#ff3df0', '#fff'][i % 4],
+          Math.random() * 3 + 2
+        );
+      }
+      audio.levelup();
+    }
+    // Animate score reveal
+    if (finalScoreEl) {
+      let cur = 0;
+      const total = score;
+      const dur = Math.min(1400, 350 + total * 0.4);
+      const startT = performance.now();
+      clearInterval(finalScoreEl._timer);
+      finalScoreEl.textContent = '0';
+      finalScoreEl._timer = setInterval(() => {
+        const t = Math.min(1, (performance.now() - startT) / dur);
+        const eased = 1 - Math.pow(1 - t, 3);
+        cur = Math.floor(total * eased);
+        finalScoreEl.textContent = cur;
+        if (t >= 1) { clearInterval(finalScoreEl._timer); finalScoreEl.textContent = total; }
+      }, 32);
     }
     // Track death score for dynamic difficulty
     deathScores.push(score);
@@ -504,7 +625,12 @@
     }
   });
   startBtn.addEventListener('click', () => { audio.resume(); dailyMode = false; dailyRng = null; startGame(); });
-  retryBtn.addEventListener('click', () => { audio.resume(); startGame(); });
+  retryBtn.addEventListener('click', () => {
+    audio.resume();
+    // Exit daily mode when retrying — daily is one-shot per day
+    if (dailyMode) { dailyMode = false; dailyRng = null; }
+    startGame();
+  });
 
   const muteBtn = document.getElementById('muteBtn');
   const pauseBtn = document.getElementById('pauseBtn');
@@ -525,6 +651,21 @@
     if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; }
     else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 8; }
   });
+
+  // Show daily streak banner on menu if a reward was processed at load
+  if (streakInfo) {
+    const sb = document.getElementById('streakBanner');
+    const sd = document.getElementById('streakDay');
+    const sn = document.getElementById('streakNum');
+    const sr = document.getElementById('streakReward');
+    if (sb && sd && sn && sr) {
+      sd.textContent = streakInfo.day;
+      sn.textContent = streakInfo.day;
+      sr.textContent = streakInfo.reward;
+      sb.style.display = 'flex';
+      coinsEl.textContent = totalCoins;
+    }
+  }
 
   if (dailyBtn) dailyBtn.addEventListener('click', () => {
     audio.resume();
@@ -693,6 +834,10 @@
       spawnPowerup();
       nextPowerupAt = frame + 900 + rnd() * 600;
     }
+    if (frame >= nextMysteryAt) {
+      spawnMystery();
+      nextMysteryAt = frame + 2400 + rnd() * 1800;
+    }
 
     // Move obstacles
     obstacles.forEach((o) => (o.x -= speed));
@@ -720,6 +865,16 @@
     // Move powerups
     powerups.forEach((p) => { p.x -= speed; p.t += 0.08; });
     powerups = powerups.filter((p) => p.x > -40 && !p.picked);
+
+    // Move mystery boxes (fall + scroll)
+    mysteryBoxes.forEach((m) => {
+      m.x -= speed;
+      m.y += m.vy;
+      m.t += 0.1;
+      m.glow = (Math.sin(m.t * 2) + 1) * 0.5;
+      if (m.y + m.r > GROUND - 4) { m.y = GROUND - 4 - m.r; m.vy = 0; }
+    });
+    mysteryBoxes = mysteryBoxes.filter((m) => m.x > -50 && !m.picked);
 
     // Decay magnet
     if (magnetFrames > 0) magnetFrames--;
@@ -822,6 +977,16 @@
         }
       }
     }
+    // Mystery box pickups
+    for (const m of mysteryBoxes) {
+      if (m.picked) continue;
+      const dx = m.x - pcx;
+      const dy = m.y - pcy;
+      if (dx * dx + dy * dy < (m.r + 28) * (m.r + 28)) {
+        m.picked = true;
+        openMystery();
+      }
+    }
     // Powerup pickups
     for (const p of powerups) {
       if (p.picked) continue;
@@ -848,10 +1013,10 @@
 
     score += 1;
     tryLevelUp();
-    // Achievements
-    if (score === 500) unlock('score_500');
-    else if (score === 2000) unlock('score_2000');
-    else if (score === 5000) unlock('score_5000');
+    // Achievements (use >= because combo multipliers can skip exact values)
+    if (score >= 500 && !hasAch('score_500')) unlock('score_500');
+    if (score >= 2000 && !hasAch('score_2000')) unlock('score_2000');
+    if (score >= 5000 && !hasAch('score_5000')) unlock('score_5000');
     if (combo === 10) unlock('combo_10');
     else if (combo === 20) unlock('combo_20');
     if (magnetFrames === 60 * 8 - 1) unlock('magnet');
@@ -1059,6 +1224,41 @@
     }
   }
 
+  function drawMystery() {
+    for (const m of mysteryBoxes) {
+      const px = m.x;
+      const py = m.y;
+      // pulsing halo
+      const halo = 50 + m.glow * 16;
+      const g = ctx.createRadialGradient(px, py, 0, px, py, halo);
+      g.addColorStop(0, 'rgba(255, 230, 120, 0.7)');
+      g.addColorStop(0.5, 'rgba(255, 80, 220, 0.3)');
+      g.addColorStop(1, 'rgba(255, 80, 220, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(px - halo, py - halo, halo * 2, halo * 2);
+      // box rotated
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(m.t * 0.5);
+      const r = m.r;
+      const grad = ctx.createLinearGradient(0, -r, 0, r);
+      grad.addColorStop(0, '#ffe14a');
+      grad.addColorStop(0.5, '#ff7a3d');
+      grad.addColorStop(1, '#ff3df0');
+      ctx.fillStyle = grad;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-r + 1, -r + 1, r * 2 - 2, r * 2 - 2);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', 0, 1);
+      ctx.restore();
+    }
+  }
+
   function drawPowerups() {
     for (const p of powerups) {
       const float = Math.sin(p.t * 2) * 4;
@@ -1182,6 +1382,7 @@
     drawGround();
     drawCoins();
     drawPowerups();
+    drawMystery();
     drawParticles();
     drawObstacles();
     drawPlayer();
