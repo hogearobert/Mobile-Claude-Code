@@ -7,7 +7,7 @@
   // ---------- Audio (procedural Web Audio, no asset files) ----------
   const audio = (() => {
     let ac, master;
-    let muted = localStorage.getItem('neon-dash-mute') === '1';
+    let muted = (function () { try { return localStorage.getItem('glitchrun.v1.mute') === '1' || localStorage.getItem('neon-dash-mute') === '1'; } catch (_) { return false; } })();
     function ensure() {
       if (ac) return ac;
       try {
@@ -75,7 +75,7 @@
       },
       toggle() {
         muted = !muted;
-        localStorage.setItem('neon-dash-mute', muted ? '1' : '0');
+        try { localStorage.setItem('glitchrun.v1.mute', muted ? '1' : '0'); } catch (_) {}
         return muted;
       },
       isMuted: () => muted
@@ -127,8 +127,37 @@
   const STATE = { MENU: 0, PLAY: 1, OVER: 2, PAUSED: 3 };
   let state = STATE.MENU;
 
-  let best = parseInt(localStorage.getItem('neon-dash-best') || '0', 10);
-  let totalCoins = parseInt(localStorage.getItem('neon-dash-coins') || '0', 10);
+  // Storage: namespaced keys with one-time migration from legacy
+  const NS = 'glitchrun.v1.';
+  const SK = {
+    best: NS + 'best',
+    coins: NS + 'coins',
+    mute: NS + 'mute',
+    dailyBest: NS + 'dailyBest',
+    dailyDate: NS + 'dailyDate',
+    achievements: NS + 'achievements',
+    runs: NS + 'runs',
+    tutorial: NS + 'tutorialDone',
+    deathScores: NS + 'deathScores'
+  };
+  function readLS(k, dflt) { try { return localStorage.getItem(k) ?? dflt; } catch (_) { return dflt; } }
+  function writeLS(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+  (function migrate() {
+    const legacy = { 'neon-dash-best': SK.best, 'neon-dash-coins': SK.coins, 'neon-dash-mute': SK.mute };
+    for (const old in legacy) {
+      try {
+        const v = localStorage.getItem(old);
+        if (v != null && localStorage.getItem(legacy[old]) == null) {
+          localStorage.setItem(legacy[old], v);
+          localStorage.removeItem(old);
+        }
+      } catch (_) {}
+    }
+  })();
+
+  let best = parseInt(readLS(SK.best, '0'), 10);
+  let totalCoins = parseInt(readLS(SK.coins, '0'), 10);
+  let totalRuns = parseInt(readLS(SK.runs, '0'), 10);
   bestEl.textContent = best;
   coinsEl.textContent = totalCoins;
 
@@ -151,6 +180,20 @@
   let stars = [];
   let mountains = [];
   let buildings = [];
+
+  // Particle pool — avoid GC pressure from hot loops
+  const MAX_PARTICLES = 220;
+  function pushParticle(x, y, vx, vy, life, color, r) {
+    if (particles.length >= MAX_PARTICLES) {
+      // Recycle the oldest (FIFO eviction is acceptable visually)
+      const p = particles.shift();
+      p.x = x; p.y = y; p.vx = vx; p.vy = vy;
+      p.life = life; p.color = color; p.r = r;
+      particles.push(p);
+      return;
+    }
+    particles.push({ x, y, vx, vy, life, color, r });
+  }
 
   let scrollX = 0;
   let speed = 6;
@@ -199,6 +242,86 @@
   let texts = [];
   function popText(msg, x, y, color, scale) {
     texts.push({ msg, x, y, color: color || '#ffe14a', scale: scale || 1, life: 50 });
+  }
+
+  // ---------- Game-feel: slow-mo, screen flash, chromatic glitch ----------
+  let slowmoFrames = 0;     // frames of remaining slow-mo
+  let flashFrame = -1000;   // last frame a white flash was triggered
+  let glitchFrame = -1000;  // last frame a chromatic glitch was triggered
+
+  // ---------- Mode & difficulty (2026 standards: dynamic difficulty + daily) ----------
+  let dailyMode = false;
+  let dailyDate = '';
+  let dailyBest = parseInt(readLS(SK.dailyBest, '0'), 10);
+  let storedDailyDate = readLS(SK.dailyDate, '');
+  function todayStr() {
+    const d = new Date();
+    return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate();
+  }
+  if (storedDailyDate !== todayStr()) {
+    dailyBest = 0;
+    writeLS(SK.dailyBest, '0');
+    writeLS(SK.dailyDate, todayStr());
+  }
+  // Seeded RNG for daily challenge (mulberry32)
+  let dailyRng = null;
+  function makeRng(seedStr) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      h = Math.imul(h ^ seedStr.charCodeAt(i), 16777619) >>> 0;
+    }
+    return function () {
+      h |= 0; h = (h + 0x6D2B79F5) | 0;
+      let t = Math.imul(h ^ (h >>> 15), 1 | h);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function rnd() { return dailyMode && dailyRng ? dailyRng() : Math.random(); }
+
+  // Dynamic difficulty: track last 3 deaths' scores, scale spawn rate down if struggling
+  let deathScores = [];
+  try { deathScores = JSON.parse(readLS(SK.deathScores, '[]')) || []; } catch (_) { deathScores = []; }
+  function difficultyEase() {
+    if (deathScores.length < 3) return 0;
+    const last3 = deathScores.slice(-3);
+    const avg = last3.reduce((a, b) => a + b, 0) / last3.length;
+    if (avg < 200) return 1.4;    // very easy — wider gaps
+    if (avg < 500) return 1.15;   // forgiving
+    if (avg > 1500) return 0.85;  // tighter
+    return 1.0;
+  }
+
+  // ---------- Achievements ----------
+  const ACHIEVEMENTS = [
+    { id: 'first_jump',    name: 'Primul salt',         desc: 'Sari pentru prima dată' },
+    { id: 'score_500',     name: 'Cinci sute',          desc: 'Atinge 500 scor' },
+    { id: 'score_2000',    name: 'Două mii',            desc: 'Atinge 2000 scor' },
+    { id: 'score_5000',    name: 'Veteran',             desc: 'Atinge 5000 scor' },
+    { id: 'combo_10',      name: 'Combo Maestru',       desc: 'Atinge 10 combo' },
+    { id: 'combo_20',      name: 'Imparabil',           desc: 'Atinge 20 combo' },
+    { id: 'magnet',        name: 'Atracție magnetică',  desc: 'Folosește un magnet' },
+    { id: 'shield_save',   name: 'Salvare scut',        desc: 'Scutul absoarbe o lovitură' },
+    { id: 'level_3',       name: 'Glacial',             desc: 'Ajunge la nivelul 4' },
+    { id: 'level_6',       name: 'Călătorul cosmic',    desc: 'Ajunge la nivelul 6' },
+    { id: 'coins_100',     name: 'Sută de stele',       desc: 'Adună 100 de stele în total' },
+    { id: 'revive',        name: 'A doua șansă',        desc: 'Folosește un revive' }
+  ];
+  const achKey = (id) => SK.achievements + '.' + id;
+  function hasAch(id) { return readLS(achKey(id), '0') === '1'; }
+  function unlock(id) {
+    if (hasAch(id)) return;
+    writeLS(achKey(id), '1');
+    const a = ACHIEVEMENTS.find((x) => x.id === id);
+    if (a) showToast('🏆 ' + a.name, a.desc);
+  }
+  function showToast(title, desc) {
+    if (!toastEl) return;
+    toastEl.querySelector('.t-title').textContent = title;
+    toastEl.querySelector('.t-desc').textContent = desc;
+    toastEl.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toastEl.classList.remove('show'), 3500);
   }
 
   // ---------- Init parallax ----------
@@ -270,10 +393,14 @@
     invincibleUntil = -1;
     reviveUsed = false;
     texts = [];
+    slowmoFrames = 0;
+    flashFrame = -1000;
+    glitchFrame = -1000;
     scoreEl.textContent = '0';
     coinsEl.textContent = totalCoins;
     if (levelEl) levelEl.textContent = palette.name;
     if (comboEl) comboEl.textContent = '';
+    if (titleSubEl) titleSubEl.textContent = dailyMode ? 'DAILY · ' + todayStr() : '';
     initParallax();
   }
 
@@ -287,16 +414,16 @@
     player.onGround = false;
     player.jumps++;
     if (player.jumps === 1) audio.jump(); else audio.djump();
+    if (player.jumps === 1) unlock('first_jump');
+    const jumpColor = player.jumps === 1 ? '#19f0ff' : '#ff3df0';
     for (let i = 0; i < 10; i++) {
-      particles.push({
-        x: player.x + player.w / 2,
-        y: player.y + player.h,
-        vx: (Math.random() - 0.5) * 4,
-        vy: Math.random() * 3 + 1,
-        life: 24,
-        color: player.jumps === 1 ? '#19f0ff' : '#ff3df0',
-        r: Math.random() * 3 + 1
-      });
+      pushParticle(
+        player.x + player.w / 2,
+        player.y + player.h,
+        (Math.random() - 0.5) * 4,
+        Math.random() * 3 + 1,
+        24, jumpColor, Math.random() * 3 + 1
+      );
     }
   }
 
@@ -305,6 +432,12 @@
     gameoverEl.classList.remove('show');
     reset();
     state = STATE.PLAY;
+    // Tutorial: show once for new players
+    if (tutorialEl && readLS(SK.tutorial, '0') !== '1') {
+      tutorialEl.classList.add('show');
+      writeLS(SK.tutorial, '1');
+      setTimeout(() => tutorialEl.classList.remove('show'), 2400);
+    }
   }
 
   function gameOver() {
@@ -313,33 +446,44 @@
     audio.hit();
     setTimeout(() => audio.over(), 220);
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
-    if (score > best) {
+    glitchFrame = frame;
+    flashFrame = frame;
+    if (dailyMode) {
+      if (score > dailyBest) {
+        dailyBest = score;
+        writeLS(SK.dailyBest, dailyBest);
+      }
+    } else if (score > best) {
       best = score;
-      localStorage.setItem('neon-dash-best', best);
+      writeLS(SK.best, best);
       bestEl.textContent = best;
     }
+    // Track death score for dynamic difficulty
+    deathScores.push(score);
+    if (deathScores.length > 10) deathScores.shift();
+    writeLS(SK.deathScores, JSON.stringify(deathScores));
+    totalRuns++;
+    writeLS(SK.runs, totalRuns);
+    const earned = runCoins;
     totalCoins += runCoins;
     runCoins = 0;
-    localStorage.setItem('neon-dash-coins', totalCoins);
+    writeLS(SK.coins, totalCoins);
     coinsEl.textContent = totalCoins;
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
-    finalCoinsEl.textContent = '+' + runCoins;
+    finalCoinsEl.textContent = '+' + earned;
     if (reviveBtn) reviveBtn.style.display = reviveUsed ? 'none' : 'inline-block';
     setTimeout(() => gameoverEl.classList.add('show'), 280);
-    // explosion
+    const expColors = ['#ff3df0', '#19f0ff', '#ffe14a'];
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2;
       const v = Math.random() * 8 + 2;
-      particles.push({
-        x: player.x + player.w / 2,
-        y: player.y + player.h / 2,
-        vx: Math.cos(a) * v,
-        vy: Math.sin(a) * v,
-        life: 50,
-        color: ['#ff3df0', '#19f0ff', '#ffe14a'][i % 3],
-        r: Math.random() * 4 + 2
-      });
+      pushParticle(
+        player.x + player.w / 2,
+        player.y + player.h / 2,
+        Math.cos(a) * v, Math.sin(a) * v,
+        50, expColors[i % 3], Math.random() * 4 + 2
+      );
     }
   }
 
@@ -361,7 +505,7 @@
       else jump();
     }
   });
-  startBtn.addEventListener('click', () => { audio.resume(); startGame(); });
+  startBtn.addEventListener('click', () => { audio.resume(); dailyMode = false; dailyRng = null; startGame(); });
   retryBtn.addEventListener('click', () => { audio.resume(); startGame(); });
 
   const muteBtn = document.getElementById('muteBtn');
@@ -371,6 +515,10 @@
   const reviveBtn = document.getElementById('reviveBtn');
   const adOverlay = document.getElementById('adOverlay');
   const adCountdown = document.getElementById('adCountdown');
+  const dailyBtn = document.getElementById('dailyBtn');
+  const tutorialEl = document.getElementById('tutorial');
+  const toastEl = document.getElementById('toast');
+  const titleSubEl = document.getElementById('runTitle');
   function refreshMuteIcon() { if (muteBtn) muteBtn.textContent = audio.isMuted() ? '🔇' : '🔊'; }
   refreshMuteIcon();
   if (muteBtn) muteBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.resume(); audio.toggle(); refreshMuteIcon(); });
@@ -378,6 +526,13 @@
     e.stopPropagation();
     if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; }
     else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 8; }
+  });
+
+  if (dailyBtn) dailyBtn.addEventListener('click', () => {
+    audio.resume();
+    dailyMode = true;
+    dailyRng = makeRng('glitchrun-daily-' + todayStr());
+    startGame();
   });
 
   if (reviveBtn) reviveBtn.addEventListener('click', () => {
@@ -409,11 +564,14 @@
     player.onGround = false;
     invincibleUntil = frame + 120;
     inputGraceUntil = frame + 10;
+    slowmoFrames = 30;
+    flashFrame = frame;
     shake = 6;
     if (reviveBtn) reviveBtn.style.display = 'none';
     state = STATE.PLAY;
     audio.power();
     popText('REVIVED!', player.x + player.w / 2, GROUND - 200, '#19f0ff', 1.4);
+    unlock('revive');
   }
 
   // ---------- Spawning ----------
@@ -477,24 +635,24 @@
       for (let i = 0; i < 30; i++) {
         const a = Math.random() * Math.PI * 2;
         const v = Math.random() * 5 + 2;
-        particles.push({
-          x: player.x + player.w / 2,
-          y: player.y + player.h / 2,
-          vx: Math.cos(a) * v,
-          vy: Math.sin(a) * v,
-          life: 50,
-          color: palette.sun,
-          r: Math.random() * 3 + 1
-        });
+        pushParticle(
+          player.x + player.w / 2,
+          player.y + player.h / 2,
+          Math.cos(a) * v, Math.sin(a) * v,
+          50, palette.sun, Math.random() * 3 + 1
+        );
       }
       audio.levelup && audio.levelup();
+      flashFrame = frame;
     }
   }
 
   // ---------- Update ----------
   function update() {
     frame++;
-    speed = baseSpeed + Math.min(score / 50, 8);
+    const slowmoT = slowmoFrames > 0 ? 0.35 : 1.0;
+    if (slowmoFrames > 0) slowmoFrames--;
+    speed = (baseSpeed + Math.min(score / 50, 8)) * slowmoT;
     scrollX += speed;
 
     // Player physics
@@ -522,19 +680,20 @@
     player.trail.forEach((t) => t.life--);
     player.trail = player.trail.filter((t) => t.life > 0);
 
-    // Spawn
+    // Spawn (with dynamic difficulty ease)
+    const ease = difficultyEase();
     if (frame >= nextObstacleAt) {
       spawnObstacle();
-      const gap = Math.max(45, 95 - score / 8 - levelIdx * 3);
-      nextObstacleAt = frame + gap + Math.random() * 30;
+      const gap = Math.max(45, (95 - score / 8 - levelIdx * 3) * ease);
+      nextObstacleAt = frame + gap + rnd() * 30;
     }
     if (frame >= nextCoinAt) {
       spawnCoin();
-      nextCoinAt = frame + 90 + Math.random() * 80;
+      nextCoinAt = frame + 90 + rnd() * 80;
     }
     if (frame >= nextPowerupAt) {
       spawnPowerup();
-      nextPowerupAt = frame + 900 + Math.random() * 600;
+      nextPowerupAt = frame + 900 + rnd() * 600;
     }
 
     // Move obstacles
@@ -585,14 +744,14 @@
       m.x -= speed * 0.15;
     });
     if (mountains.length && mountains[0].x + mountains[0].w < -50) mountains.shift();
-    while (mountains[mountains.length - 1].x + mountains[mountains.length - 1].w < W + 200) {
+    while (mountains.length < 20 && mountains[mountains.length - 1].x + mountains[mountains.length - 1].w < W + 200) {
       const last = mountains[mountains.length - 1];
       const w = 180 + Math.random() * 160;
       mountains.push({ x: last.x + last.w * 0.6, w, h: 120 + Math.random() * 100, hue: 280 + Math.random() * 40 });
     }
     buildings.forEach((b) => (b.x -= speed * 0.4));
     if (buildings.length && buildings[0].x + buildings[0].w < -10) buildings.shift();
-    while (buildings[buildings.length - 1].x + buildings[buildings.length - 1].w < W + 100) {
+    while (buildings.length < 30 && buildings[buildings.length - 1].x + buildings[buildings.length - 1].w < W + 100) {
       const last = buildings[buildings.length - 1];
       const w = 50 + Math.random() * 80;
       buildings.push({
@@ -625,11 +784,15 @@
             shieldActive = false;
             shieldFlashFrame = frame;
             invincibleUntil = frame + 60;
+            slowmoFrames = 30;
+            glitchFrame = frame;
+            flashFrame = frame;
             o.x = -999;
-            shake = Math.max(shake, 10);
+            shake = Math.max(shake, 14);
             audio.hit();
-            popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.2);
+            popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.4);
             if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_) {} }
+            unlock('shield_save');
             break;
           }
           gameOver();
@@ -657,12 +820,7 @@
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * Math.PI * 2;
           const v = Math.random() * 3 + 1;
-          particles.push({
-            x: c.x, y: c.y,
-            vx: Math.cos(a) * v,
-            vy: Math.sin(a) * v - 1,
-            life: 24, color: '#ffe14a', r: Math.random() * 2 + 1
-          });
+          pushParticle(c.x, c.y, Math.cos(a) * v, Math.sin(a) * v - 1, 24, '#ffe14a', Math.random() * 2 + 1);
         }
       }
     }
@@ -681,23 +839,27 @@
           popText('SHIELD', p.x, p.y - 20, '#19f0ff', 1.2);
         }
         audio.power && audio.power();
+        const pcol = p.type === 'magnet' ? '#ffe14a' : '#19f0ff';
         for (let i = 0; i < 16; i++) {
           const a = Math.random() * Math.PI * 2;
           const v = Math.random() * 4 + 2;
-          particles.push({
-            x: p.x, y: p.y,
-            vx: Math.cos(a) * v,
-            vy: Math.sin(a) * v,
-            life: 40,
-            color: p.type === 'magnet' ? '#ffe14a' : '#19f0ff',
-            r: Math.random() * 3 + 1
-          });
+          pushParticle(p.x, p.y, Math.cos(a) * v, Math.sin(a) * v, 40, pcol, Math.random() * 3 + 1);
         }
       }
     }
 
     score += 1;
     tryLevelUp();
+    // Achievements
+    if (score === 500) unlock('score_500');
+    else if (score === 2000) unlock('score_2000');
+    else if (score === 5000) unlock('score_5000');
+    if (combo === 10) unlock('combo_10');
+    else if (combo === 20) unlock('combo_20');
+    if (magnetFrames === 60 * 8 - 1) unlock('magnet');
+    if (levelIdx === 3) unlock('level_3');
+    else if (levelIdx === 5) unlock('level_6');
+    if (totalCoins + runCoins >= 100) unlock('coins_100');
     if (frame % 4 === 0) scoreEl.textContent = score;
 
     if (shake > 0) shake *= 0.9;
@@ -1027,6 +1189,28 @@
     drawPlayer();
     drawTexts();
     ctx.restore();
+
+    // Full-screen white flash (level up / shield save / revive)
+    const flashAge = frame - flashFrame;
+    if (flashAge >= 0 && flashAge < 14) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * (1 - flashAge / 14)) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+    // Chromatic glitch bars (on hit / shield save / game over)
+    const glitchAge = frame - glitchFrame;
+    if (glitchAge >= 0 && glitchAge < 18) {
+      const a = 1 - glitchAge / 18;
+      ctx.globalCompositeOperation = 'screen';
+      for (let i = 0; i < 4; i++) {
+        const y = Math.random() * H;
+        const h = 6 + Math.random() * 20;
+        ctx.fillStyle = 'rgba(255, 40, 200, ' + (0.35 * a) + ')';
+        ctx.fillRect(-6, y, W + 12, h);
+        ctx.fillStyle = 'rgba(40, 255, 240, ' + (0.35 * a) + ')';
+        ctx.fillRect(6, y + 4, W + 12, h * 0.6);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
 
   function updateOver() {
@@ -1057,7 +1241,7 @@
         accumulator -= FIXED_DT;
         steps++;
       }
-      if (steps === 5) accumulator = 0;
+      if (steps >= 5) accumulator = Math.min(accumulator, FIXED_DT);
       draw();
     } catch (err) {
       console.error('[Neon Dash] loop error:', err);
