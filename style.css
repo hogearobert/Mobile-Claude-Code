@@ -465,8 +465,7 @@ html, body {
   height: 56px;
   border-radius: 50%;
   margin: 0 auto 8px;
-  box-shadow: 0 0 20px var(--p-glow, rgba(25,240,255,0.5));
-  background: var(--p-bg, radial-gradient(circle at 30% 30%, #fff, #19f0ff 60%, #0b94ad));
+  /* background + box-shadow setate inline via JS pentru fiecare skin */
 }
 .skin-name {
   font-size: 12px;

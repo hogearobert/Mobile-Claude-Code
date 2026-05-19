@@ -491,13 +491,24 @@
       const equipped = s.id === currentSkinId;
       const div = document.createElement('div');
       div.className = 'skin-card' + (equipped ? ' equipped' : owned ? ' owned' : ' locked');
-      const previewBg = `radial-gradient(circle at 30% 30%, ${s.core[0]}, ${s.core[2]} 60%, ${s.core[3]})`;
-      const previewGlow = s.halo[0];
-      div.innerHTML = '<div class="skin-preview" style="background:' + previewBg + ';--p-glow:' + previewGlow + '"></div>' +
-        '<div class="skin-name">' + s.name + '</div>' +
-        '<div class="skin-cost ' + (equipped ? 'equipped' : owned ? 'owned' : s.adOnly ? 'ad' : '') + '">' +
-          (equipped ? 'ECHIPAT' : owned ? 'TAP PT ECHIPARE' : s.adOnly ? 'GRATUIT VIA AD' : (s.cost + ' ★')) +
-        '</div>';
+
+      const previewEl = document.createElement('div');
+      previewEl.className = 'skin-preview';
+      previewEl.style.background = 'radial-gradient(circle at 30% 30%, ' + s.core[0] + ', ' + s.core[2] + ' 60%, ' + s.core[3] + ')';
+      previewEl.style.boxShadow = '0 0 20px ' + s.halo[0];
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'skin-name';
+      nameEl.textContent = s.name;
+
+      const costEl = document.createElement('div');
+      costEl.className = 'skin-cost ' + (equipped ? 'equipped' : owned ? 'owned' : s.adOnly ? 'ad' : '');
+      costEl.textContent = equipped ? 'ECHIPAT' : owned ? 'TAP PT ECHIPARE' : s.adOnly ? 'GRATUIT VIA AD' : (s.cost + ' ★');
+
+      div.appendChild(previewEl);
+      div.appendChild(nameEl);
+      div.appendChild(costEl);
+
       div.addEventListener('click', () => {
         if (owned) {
           currentSkinId = s.id;
