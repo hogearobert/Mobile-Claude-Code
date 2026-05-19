@@ -393,7 +393,7 @@
     { id: 'solar',   name: 'SOLAR',   cost: 500,  locked: true,  core:['#fff','#fff5d0','#ffd64a','#a86b00'], halo:['rgba(255,225,100,0.6)','rgba(255,120,40,0.25)'], ring:'rgba(255,200,80,0.75)', trail:'255,225,100' },
     { id: 'crimson', name: 'CRIMSON', cost: 1500, locked: true,  core:['#fff','#ffcad0','#ff3d6e','#8a0a20'], halo:['rgba(255,80,120,0.55)','rgba(255,40,60,0.25)'],  ring:'rgba(255,120,140,0.75)', trail:'255,100,140' },
     { id: 'cosmic',  name: 'COSMIC',  cost: 3500, locked: true,  core:['#fff','#e0d0ff','#b04dff','#3a0a8c'], halo:['rgba(180,80,255,0.55)','rgba(120,40,255,0.25)'], ring:'rgba(200,120,255,0.75)', trail:'180,100,255' },
-    { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, core:['#fff','#ffd0ff','#ff3df0','#19f0ff'], halo:['rgba(255,61,240,0.55)','rgba(25,240,255,0.4)'], ring:'rgba(255,255,255,0.85)', trail:'255,200,255' }
+    { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, animated: true, core:['#fff','#ffd0ff','#ff3df0','#5a0a8c'], halo:['rgba(255,61,240,0.6)','rgba(180,40,200,0.22)'], ring:'rgba(255,200,255,0.85)', trail:'255,140,255' }
   ];
   function ownedSkin(id) {
     if (id === 'cyan') return true;
@@ -1535,6 +1535,19 @@
     const cy = player.y + player.h / 2;
     const baseR = 22;
     const pulse = 1 + Math.sin(frame * 0.18) * 0.06;
+
+    // GLITCH skin effect: chromatic offset (cyan + pink "ghost" rings flicker around the orb)
+    if (sk.animated && Math.floor(frame / 6) % 4 !== 0) {
+      const jitter = (Math.random() - 0.5) * 4;
+      ctx.fillStyle = 'rgba(25, 240, 255, 0.35)';
+      ctx.beginPath();
+      ctx.arc(cx - 3 + jitter, cy, baseR * 0.95, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 61, 240, 0.35)';
+      ctx.beginPath();
+      ctx.arc(cx + 3 - jitter, cy, baseR * 0.95, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // Outer glow halo (skin-tinted)
     const glowR = baseR * 2.2 * pulse;
