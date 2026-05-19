@@ -78,7 +78,249 @@
         try { localStorage.setItem('glitchrun.v1.mute', muted ? '1' : '0'); } catch (_) {}
         return muted;
       },
-      isMuted: () => muted
+      isMuted: () => muted,
+      ac: () => ac,
+      master: () => master
+    };
+  })();
+
+  // ---------- Procedural music — one synthwave track per level ----------
+  const music = (() => {
+    const NOTE_FREQ = { C:261.63, 'C#':277.18, D:293.66, 'D#':311.13, E:329.63, F:349.23, 'F#':369.99, G:392.00, 'G#':415.30, A:440.00, 'A#':466.16, B:493.88 };
+    function nf(n, oct) { return NOTE_FREQ[n] * Math.pow(2, (oct || 4) - 4); }
+
+    // 6 tracks — one per level. 4 chords × 16 16th-note steps per loop.
+    const KICK_A = [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,1,0]; // chill 4-on-floor
+    const KICK_B = [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,1,0,0]; // driving
+    const KICK_C = [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0]; // sparse
+    const SONGS = [
+      // 0 — ORIGIN: classic synthwave Am-F-C-G
+      { bpm:108, chords:[['A','C','E'],['F','A','C'],['C','E','G'],['G','B','D']], bass:['A','F','C','G'], bassOct:2, leadOct:5, kick:KICK_A, leadDensity:0.5 },
+      // 1 — INFERNO: aggressive Dm-Bb-F-C
+      { bpm:132, chords:[['D','F','A'],['A#','D','F'],['F','A','C'],['C','E','G']], bass:['D','A#','F','C'], bassOct:2, leadOct:5, kick:KICK_B, leadDensity:0.65 },
+      // 2 — VERDANT: mellow Em-C-G-D
+      { bpm:100, chords:[['E','G','B'],['C','E','G'],['G','B','D'],['D','F#','A']], bass:['E','C','G','D'], bassOct:2, leadOct:5, kick:KICK_C, leadDensity:0.4 },
+      // 3 — GLACIAL: cold Gm-D#-A#-F
+      { bpm:96,  chords:[['G','A#','D'],['D#','G','A#'],['A#','D','F'],['F','A','C']], bass:['G','D#','A#','F'], bassOct:2, leadOct:5, kick:KICK_C, leadDensity:0.35 },
+      // 4 — CRIMSON: dark Fm-C#-G#-D#
+      { bpm:128, chords:[['F','G#','C'],['C#','F','G#'],['G#','C','D#'],['D#','G','A#']], bass:['F','C#','G#','D#'], bassOct:2, leadOct:5, kick:KICK_B, leadDensity:0.6 },
+      // 5 — SOLAR: epic uplifting Cm-G#-D#-A#
+      { bpm:118, chords:[['C','D#','G'],['G#','C','D#'],['D#','G','A#'],['A#','D','F']], bass:['C','G#','D#','A#'], bassOct:2, leadOct:5, kick:KICK_A, leadDensity:0.55 }
+    ];
+
+    let muted = (function(){ try { return localStorage.getItem('glitchrun.v1.muteMusic') === '1'; } catch (_) { return false; } })();
+    let ac = null, master = null, bassGain, padGain, leadGain, drumGain;
+    let active = false;
+    let song = null, bpm = 108, stepDur = 0;
+    let stepIndex = 0;
+    let nextTime = 0;
+    let scheduler = null;
+    let currentIdx = -1;
+
+    function ensure() {
+      if (ac) return;
+      const a = audio.ac && audio.ac();
+      if (a) {
+        ac = a;
+        master = ac.createGain();
+        master.gain.value = 0;
+        master.connect(audio.master ? audio.master() : ac.destination);
+      } else {
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          ac = new AC();
+          master = ac.createGain();
+          master.gain.value = 0;
+          master.connect(ac.destination);
+        } catch (_) { return; }
+      }
+      bassGain = ac.createGain(); bassGain.gain.value = 0.55;
+      padGain = ac.createGain(); padGain.gain.value = 0.22;
+      leadGain = ac.createGain(); leadGain.gain.value = 0.32;
+      drumGain = ac.createGain(); drumGain.gain.value = 0.45;
+      bassGain.connect(master);
+      padGain.connect(master);
+      leadGain.connect(master);
+      drumGain.connect(master);
+    }
+
+    function blip(dest, freq, when, dur, type, attack, vol, slide) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, when);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(1, slide), when + dur);
+      g.gain.setValueAtTime(0, when);
+      g.gain.linearRampToValueAtTime(vol, when + (attack || 0.01));
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.connect(g).connect(dest);
+      o.start(when);
+      o.stop(when + dur + 0.03);
+    }
+
+    function playKick(when) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(150, when);
+      o.frequency.exponentialRampToValueAtTime(40, when + 0.16);
+      g.gain.setValueAtTime(0.7, when);
+      g.gain.exponentialRampToValueAtTime(0.001, when + 0.2);
+      o.connect(g).connect(drumGain);
+      o.start(when);
+      o.stop(when + 0.22);
+    }
+
+    function playHat(when, vol) {
+      const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.04), ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      const g = ac.createGain();
+      g.gain.value = vol || 0.08;
+      const flt = ac.createBiquadFilter();
+      flt.type = 'highpass';
+      flt.frequency.value = 6000;
+      src.connect(flt).connect(g).connect(drumGain);
+      src.start(when);
+    }
+
+    function playBass(freq, when, dur) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'square';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0, when);
+      g.gain.linearRampToValueAtTime(0.35, when + 0.01);
+      g.gain.linearRampToValueAtTime(0.25, when + dur * 0.5);
+      g.gain.linearRampToValueAtTime(0, when + dur);
+      const flt = ac.createBiquadFilter();
+      flt.type = 'lowpass';
+      flt.frequency.value = 700;
+      o.connect(flt).connect(g).connect(bassGain);
+      o.start(when);
+      o.stop(when + dur + 0.05);
+    }
+
+    function playPad(freq, when, dur) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'sawtooth';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0, when);
+      g.gain.linearRampToValueAtTime(0.13, when + 0.12);
+      g.gain.linearRampToValueAtTime(0.09, when + dur - 0.15);
+      g.gain.linearRampToValueAtTime(0, when + dur);
+      const flt = ac.createBiquadFilter();
+      flt.type = 'lowpass';
+      flt.frequency.value = 1400;
+      flt.Q.value = 2;
+      o.connect(flt).connect(g).connect(padGain);
+      o.start(when);
+      o.stop(when + dur + 0.05);
+    }
+
+    function schedule(when) {
+      const beatsPerBar = 16;
+      const barIdx = Math.floor(stepIndex / beatsPerBar) % song.chords.length;
+      const stepInBar = stepIndex % beatsPerBar;
+
+      // Bass: hits on 0, 4, 8, 12 (every quarter)
+      if (stepInBar % 4 === 0) {
+        playBass(nf(song.bass[barIdx], song.bassOct), when, stepDur * 3.5);
+      }
+      // Pad: full bar chord on step 0
+      if (stepInBar === 0) {
+        const chord = song.chords[barIdx];
+        for (let i = 0; i < chord.length; i++) {
+          playPad(nf(chord[i], 4), when, stepDur * beatsPerBar * 0.95);
+        }
+      }
+      // Lead arpeggio: every 8th note with random pickup
+      if (stepInBar % 2 === 0 && Math.random() < song.leadDensity) {
+        const chord = song.chords[barIdx];
+        const note = chord[Math.floor(Math.random() * chord.length)];
+        const oct = Math.random() < 0.25 ? song.leadOct + 1 : song.leadOct;
+        blip(leadGain, nf(note, oct), when, stepDur * 1.2, 'triangle', 0.005, 0.28);
+      }
+      // Drums
+      if (song.kick[stepInBar]) playKick(when);
+      if (stepInBar % 2 === 1) playHat(when, 0.06);
+      if (stepInBar === 4 || stepInBar === 12) playHat(when, 0.15); // snare-ish
+    }
+
+    function loop() {
+      if (!active || !ac) return;
+      const now = ac.currentTime;
+      while (nextTime < now + 0.12) {
+        schedule(nextTime);
+        nextTime += stepDur;
+        stepIndex++;
+      }
+      scheduler = setTimeout(loop, 25);
+    }
+
+    function targetVol() { return muted ? 0 : 0.16; }
+
+    function fadeMasterTo(v, secs) {
+      if (!ac || !master) return;
+      master.gain.cancelScheduledValues(ac.currentTime);
+      master.gain.setValueAtTime(master.gain.value, ac.currentTime);
+      master.gain.linearRampToValueAtTime(v, ac.currentTime + (secs || 0.4));
+    }
+
+    return {
+      start(levelIdx) {
+        ensure();
+        if (!ac) return;
+        currentIdx = levelIdx % SONGS.length;
+        song = SONGS[currentIdx];
+        bpm = song.bpm;
+        stepDur = 60 / bpm / 4;
+        stepIndex = 0;
+        nextTime = ac.currentTime + 0.1;
+        active = true;
+        fadeMasterTo(targetVol(), 0.6);
+        if (scheduler) clearTimeout(scheduler);
+        loop();
+      },
+      stop() {
+        active = false;
+        if (scheduler) { clearTimeout(scheduler); scheduler = null; }
+        fadeMasterTo(0, 0.3);
+      },
+      pause() {
+        active = false;
+        if (scheduler) { clearTimeout(scheduler); scheduler = null; }
+        fadeMasterTo(0, 0.15);
+      },
+      resumePlay() {
+        if (!song || !ac) return;
+        nextTime = ac.currentTime + 0.05;
+        active = true;
+        fadeMasterTo(targetVol(), 0.25);
+        if (scheduler) clearTimeout(scheduler);
+        loop();
+      },
+      setLevel(idx) {
+        if (currentIdx === (idx % SONGS.length)) return;
+        if (active) {
+          // Quick crossfade: fade out, then start new
+          fadeMasterTo(0, 0.25);
+          setTimeout(() => { if (active || song) this.start(idx); }, 260);
+        } else {
+          currentIdx = idx % SONGS.length;
+        }
+      },
+      setMuted(m) {
+        muted = m;
+        try { localStorage.setItem('glitchrun.v1.muteMusic', muted ? '1' : '0'); } catch (_) {}
+        if (active) fadeMasterTo(targetVol(), 0.2);
+      },
+      toggle() { this.setMuted(!muted); return muted; },
+      isMuted() { return muted; },
+      isPlaying() { return active; }
     };
   })();
   const overlay = document.getElementById('overlay');
@@ -755,6 +997,7 @@
     if (doubleCoinsBtn) { doubleCoinsBtn.disabled = false; doubleCoinsBtn.style.display = ''; }
     reset();
     state = STATE.PLAY;
+    music.start(0);
     // Tutorial: show once for new players (flag set first to avoid retrigger on reload)
     if (tutorialEl && readLS(SK.tutorial, '0') !== '1') {
       writeLS(SK.tutorial, '1');
@@ -766,6 +1009,7 @@
   function gameOver() {
     state = STATE.OVER;
     shake = 18;
+    music.stop();
     audio.hit();
     setTimeout(() => audio.over(), 220);
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
@@ -933,11 +1177,19 @@
   const titleSubEl = document.getElementById('runTitle');
   function refreshMuteIcon() { if (muteBtn) muteBtn.textContent = audio.isMuted() ? '🔇' : '🔊'; }
   refreshMuteIcon();
-  if (muteBtn) muteBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.resume(); audio.toggle(); refreshMuteIcon(); });
+  if (muteBtn) muteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    audio.resume();
+    const m = audio.toggle();
+    music.setMuted(m);
+    refreshMuteIcon();
+  });
+  // Apply persisted mute to music engine at boot
+  music.setMuted(audio.isMuted());
   if (pauseBtn) pauseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; }
-    else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 8; }
+    if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; music.pause(); }
+    else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 8; music.resumePlay(); }
   });
 
   // Show daily streak banner on menu if a reward was processed at load
@@ -1102,6 +1354,7 @@
       audio.levelup && audio.levelup();
       flashFrame = frame;
       missionEvent('level', levelIdx);
+      music.setLevel(levelIdx);
     }
   }
 
