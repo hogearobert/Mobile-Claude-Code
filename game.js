@@ -730,35 +730,65 @@
     }
   }
 
+  // Lift a coin (or pickup) so it doesn't spawn inside / next to any obstacle.
+  // Since coins & obstacles scroll at the same speed, their relative X is preserved
+  // forever — overlap at spawn = overlap forever. We bump Y above the obstacle.
+  function avoidObstacleOverlap(item, pad) {
+    pad = pad || 4;
+    for (let iter = 0; iter < 4; iter++) {
+      let shifted = false;
+      for (const o of obstacles) {
+        const oxL = o.x - pad;
+        const oxR = o.x + o.w + pad;
+        if (item.x + item.r > oxL && item.x - item.r < oxR) {
+          const oyT = o.y - pad;
+          const oyB = o.y + o.h + pad;
+          if (item.y + item.r > oyT && item.y - item.r < oyB) {
+            item.y = Math.max(60, o.y - item.r - 14);
+            shifted = true;
+          }
+        }
+      }
+      if (!shifted) break;
+    }
+  }
+
   function spawnCoin() {
-    const pattern = Math.floor(Math.random() * 3);
-    const baseY = GROUND - 80 - Math.random() * 100;
+    const pattern = Math.floor(rnd() * 3);
+    const baseY = GROUND - 80 - rnd() * 100;
+    const batch = [];
     if (pattern === 0) {
-      coinsArr.push({ x: W + 30, y: baseY, r: 14, picked: false, t: Math.random() * Math.PI * 2 });
+      batch.push({ x: W + 30, y: baseY, r: 14, picked: false, t: rnd() * Math.PI * 2 });
     } else if (pattern === 1) {
       for (let i = 0; i < 5; i++) {
         const px = W + 30 + i * 36;
         const py = baseY - Math.sin((i / 4) * Math.PI) * 60;
-        coinsArr.push({ x: px, y: py, r: 14, picked: false, t: Math.random() * Math.PI * 2 });
+        batch.push({ x: px, y: py, r: 14, picked: false, t: rnd() * Math.PI * 2 });
       }
     } else {
       for (let i = 0; i < 4; i++) {
-        coinsArr.push({ x: W + 30 + i * 32, y: baseY, r: 14, picked: false, t: Math.random() * Math.PI * 2 });
+        batch.push({ x: W + 30 + i * 32, y: baseY, r: 14, picked: false, t: rnd() * Math.PI * 2 });
       }
+    }
+    for (const c of batch) {
+      avoidObstacleOverlap(c);
+      coinsArr.push(c);
     }
   }
 
   function spawnPowerup() {
     const types = ['magnet', 'shield'];
-    const t = types[Math.floor(Math.random() * types.length)];
-    powerups.push({
+    const t = types[Math.floor(rnd() * types.length)];
+    const p = {
       type: t,
       x: W + 30,
-      y: GROUND - 100 - Math.random() * 60,
+      y: GROUND - 100 - rnd() * 60,
       r: 22,
       t: 0,
       picked: false
-    });
+    };
+    avoidObstacleOverlap(p, 8);
+    powerups.push(p);
   }
 
   function tryLevelUp() {
@@ -866,13 +896,23 @@
     powerups.forEach((p) => { p.x -= speed; p.t += 0.08; });
     powerups = powerups.filter((p) => p.x > -40 && !p.picked);
 
-    // Move mystery boxes (fall + scroll)
+    // Move mystery boxes (fall + scroll), land on ground OR on top of obstacles
     mysteryBoxes.forEach((m) => {
       m.x -= speed;
       m.y += m.vy;
       m.t += 0.1;
       m.glow = (Math.sin(m.t * 2) + 1) * 0.5;
       if (m.y + m.r > GROUND - 4) { m.y = GROUND - 4 - m.r; m.vy = 0; }
+      if (m.vy > 0) {
+        for (const o of obstacles) {
+          if (m.x + m.r > o.x && m.x - m.r < o.x + o.w &&
+              m.y + m.r > o.y && m.y - m.r < o.y + o.h) {
+            m.y = o.y - m.r - 2;
+            m.vy = 0;
+            break;
+          }
+        }
+      }
     });
     mysteryBoxes = mysteryBoxes.filter((m) => m.x > -50 && !m.picked);
 
