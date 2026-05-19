@@ -396,6 +396,281 @@ html, body {
 }
 .goal-msg:empty { display: none; }
 
+/* ============================================
+   Screens (Shop / Missions / Stats) + Bottom Nav
+   ============================================ */
+
+.panel.wide {
+  max-width: 360px;
+  width: 100%;
+  padding: 20px 16px 90px;
+}
+
+.screen-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.screen-title {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  margin: 0;
+  background: linear-gradient(180deg, var(--neon-cyan), var(--neon-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.screen-coins {
+  background: rgba(11, 16, 32, 0.6);
+  border: 1px solid rgba(255, 225, 74, 0.4);
+  color: var(--neon-yellow);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 800;
+  font-size: 14px;
+}
+.sub-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  opacity: 0.7;
+  margin: 18px 0 10px;
+  text-align: left;
+}
+
+/* Shop / Skins */
+.skin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.skin-card {
+  position: relative;
+  border-radius: 14px;
+  padding: 16px 10px 12px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(11, 16, 32, 0.55);
+  transition: transform 0.1s ease, border-color 0.2s ease;
+}
+.skin-card:active { transform: scale(0.96); }
+.skin-card.owned { border-color: rgba(25, 240, 255, 0.45); }
+.skin-card.equipped { border-color: var(--neon-yellow); box-shadow: 0 0 16px rgba(255, 225, 74, 0.3); }
+.skin-card.locked { opacity: 0.85; }
+.skin-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  margin: 0 auto 8px;
+  box-shadow: 0 0 20px var(--p-glow, rgba(25,240,255,0.5));
+  background: var(--p-bg, radial-gradient(circle at 30% 30%, #fff, #19f0ff 60%, #0b94ad));
+}
+.skin-name {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.skin-cost {
+  font-size: 11px;
+  color: var(--neon-yellow);
+  font-weight: 700;
+}
+.skin-cost.owned { color: var(--neon-cyan); }
+.skin-cost.equipped { color: var(--neon-yellow); }
+.skin-cost.ad::before { content: '▶ '; }
+
+/* Missions */
+.missions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mission {
+  background: rgba(11, 16, 32, 0.55);
+  border: 1px solid rgba(255, 61, 240, 0.25);
+  border-radius: 14px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.mission.done {
+  border-color: rgba(25, 240, 255, 0.5);
+  background: linear-gradient(135deg, rgba(25,240,255,0.12), rgba(255,61,240,0.06));
+}
+.mission.claimed {
+  opacity: 0.45;
+}
+.mission-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.mission-name { font-weight: 700; font-size: 13px; }
+.mission-reward {
+  font-size: 12px;
+  color: var(--neon-yellow);
+  font-weight: 800;
+}
+.mission-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.mission-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.mission-progress {
+  font-size: 10px;
+  opacity: 0.6;
+  letter-spacing: 0.5px;
+}
+.mission-claim {
+  background: linear-gradient(135deg, #19f0ff, #3df0a0);
+  border: none;
+  color: #07091a;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 900;
+  font-size: 11px;
+  cursor: pointer;
+  margin-top: 6px;
+  letter-spacing: 1px;
+}
+.reset-info {
+  font-size: 10px;
+  opacity: 0.5;
+  text-align: center;
+  margin-top: 16px;
+}
+.reset-info span { color: var(--neon-cyan); font-weight: 700; }
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stat-box {
+  background: rgba(11, 16, 32, 0.55);
+  border: 1px solid rgba(25, 240, 255, 0.2);
+  border-radius: 14px;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.stat-num {
+  font-size: 26px;
+  font-weight: 900;
+  background: linear-gradient(180deg, var(--neon-cyan), var(--neon-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.stat-lbl {
+  font-size: 10px;
+  letter-spacing: 1px;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+
+.ach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.ach-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(11, 16, 32, 0.5);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+.ach-item.unlocked {
+  border-color: rgba(255, 225, 74, 0.45);
+  background: rgba(255, 225, 74, 0.08);
+}
+.ach-item.locked .ach-name { opacity: 0.5; }
+.ach-icon { font-size: 18px; width: 24px; text-align: center; }
+.ach-name { font-size: 12px; font-weight: 700; }
+.ach-desc { font-size: 10px; opacity: 0.65; }
+.ach-text { flex: 1; min-width: 0; text-align: left; }
+
+/* Bottom Nav */
+.bottom-nav {
+  position: absolute;
+  bottom: env(safe-area-inset-bottom, 0);
+  left: 0;
+  right: 0;
+  display: none;
+  justify-content: space-around;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(7,9,26,0) 0%, rgba(7,9,26,0.85) 50%, rgba(7,9,26,0.98) 100%);
+  z-index: 12;
+}
+.bottom-nav.show { display: flex; }
+.nav-btn {
+  position: relative;
+  background: none;
+  border: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 16px;
+  gap: 2px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+.nav-btn.active {
+  opacity: 1;
+  color: var(--neon-cyan);
+}
+.nav-btn:active { transform: scale(0.92); }
+.nav-icon { font-size: 22px; }
+.nav-lbl {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.badge-dot {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--neon-yellow);
+  box-shadow: 0 0 8px var(--neon-yellow);
+}
+
+/* Game over revive + 2x coins buttons */
+.btn.double-coins {
+  background: linear-gradient(135deg, #ffe14a, #ff7a3d);
+  margin-bottom: 8px;
+  display: block;
+  width: 100%;
+  font-size: 15px;
+  padding: 12px 22px;
+  letter-spacing: 1px;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

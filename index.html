@@ -84,7 +84,8 @@
         </div>
         <p id="goalMsg" class="goal-msg"></p>
         <button id="reviveBtn" class="btn revive">▶ REVIVE GRATUIT</button>
-        <p class="ad-hint">Vezi o reclamă scurtă (5s) pentru a continua</p>
+        <button id="doubleCoinsBtn" class="btn double-coins">💰 2× STELE</button>
+        <p class="ad-hint">Vezi o reclamă scurtă pentru recompensă</p>
         <button id="retryBtn" class="btn secondary">REJOACĂ</button>
       </div>
     </div>
@@ -99,9 +100,68 @@
         <p class="ad-timer">Continuă în <span id="adCountdown">5</span>s…</p>
       </div>
     </div>
+
+    <!-- ===== Shop ===== -->
+    <div id="shopOverlay" class="overlay screen">
+      <div class="panel wide">
+        <div class="screen-head">
+          <h2 class="screen-title">SKIN-URI</h2>
+          <div class="screen-coins">★ <span id="shopCoins">0</span></div>
+        </div>
+        <div id="skinGrid" class="skin-grid"></div>
+      </div>
+    </div>
+
+    <!-- ===== Missions ===== -->
+    <div id="missionsOverlay" class="overlay screen">
+      <div class="panel wide">
+        <div class="screen-head">
+          <h2 class="screen-title">MISIUNI ZILNICE</h2>
+          <div class="screen-coins">★ <span id="missionsCoins">0</span></div>
+        </div>
+        <div id="missionsList" class="missions-list"></div>
+        <p class="reset-info">Resetare în <span id="resetTimer">--:--:--</span></p>
+      </div>
+    </div>
+
+    <!-- ===== Stats / Achievements ===== -->
+    <div id="statsOverlay" class="overlay screen">
+      <div class="panel wide">
+        <div class="screen-head">
+          <h2 class="screen-title">STATISTICI</h2>
+          <div class="screen-coins">★ <span id="statsCoins">0</span></div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box"><span class="stat-num" id="sBest">0</span><span class="stat-lbl">Record</span></div>
+          <div class="stat-box"><span class="stat-num" id="sRuns">0</span><span class="stat-lbl">Runs</span></div>
+          <div class="stat-box"><span class="stat-num" id="sStars">0</span><span class="stat-lbl">Stele</span></div>
+          <div class="stat-box"><span class="stat-num" id="sStreak">0</span><span class="stat-lbl">Streak</span></div>
+        </div>
+        <h3 class="sub-title">TROFEE</h3>
+        <div id="achList" class="ach-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== Bottom navigation ===== -->
+    <nav id="bottomNav" class="bottom-nav" aria-label="Meniu">
+      <button class="nav-btn active" data-screen="home" aria-label="Acasă">
+        <span class="nav-icon">🏠</span><span class="nav-lbl">Acasă</span>
+      </button>
+      <button class="nav-btn" data-screen="shop" aria-label="Skin-uri">
+        <span class="nav-icon">🛍</span><span class="nav-lbl">Skin</span>
+      </button>
+      <button class="nav-btn" data-screen="missions" aria-label="Misiuni">
+        <span class="nav-icon">🎯</span><span class="nav-lbl">Misiuni</span>
+        <span id="missionsBadge" class="badge-dot" style="display:none"></span>
+      </button>
+      <button class="nav-btn" data-screen="stats" aria-label="Statistici">
+        <span class="nav-icon">⭐</span><span class="nav-lbl">Stats</span>
+      </button>
+    </nav>
+
   </div>
 
-  <script src="game.js?v=15"></script>
+  <script src="game.js?v=16"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

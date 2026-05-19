@@ -332,6 +332,7 @@
     });
   }
   function openMystery() {
+    missionEvent('mystery');
     // Variable reward: small / medium / big with weighted probabilities
     const r = rnd();
     let reward;
@@ -385,6 +386,238 @@
     const a = ACHIEVEMENTS.find((x) => x.id === id);
     if (a) showToast('🏆 ' + a.name, a.desc);
   }
+  // ---------- Skins (cosmetic progression unlocked with stars) ----------
+  const SKINS = [
+    { id: 'cyan',    name: 'CYAN',    cost: 0,    locked: false, core:['#fff','#a8f6ff','#19f0ff','#0b94ad'], halo:['rgba(120,230,255,0.55)','rgba(255,80,220,0.18)'], ring:'rgba(255,90,220,0.6)',  trail:'120,230,255' },
+    { id: 'plasma',  name: 'PLASMA',  cost: 200,  locked: true,  core:['#fff','#caffd2','#3dff7a','#0a4d20'], halo:['rgba(100,255,180,0.55)','rgba(180,255,100,0.2)'], ring:'rgba(120,255,180,0.7)', trail:'100,255,180' },
+    { id: 'solar',   name: 'SOLAR',   cost: 500,  locked: true,  core:['#fff','#fff5d0','#ffd64a','#a86b00'], halo:['rgba(255,225,100,0.6)','rgba(255,120,40,0.25)'], ring:'rgba(255,200,80,0.75)', trail:'255,225,100' },
+    { id: 'crimson', name: 'CRIMSON', cost: 1500, locked: true,  core:['#fff','#ffcad0','#ff3d6e','#8a0a20'], halo:['rgba(255,80,120,0.55)','rgba(255,40,60,0.25)'],  ring:'rgba(255,120,140,0.75)', trail:'255,100,140' },
+    { id: 'cosmic',  name: 'COSMIC',  cost: 3500, locked: true,  core:['#fff','#e0d0ff','#b04dff','#3a0a8c'], halo:['rgba(180,80,255,0.55)','rgba(120,40,255,0.25)'], ring:'rgba(200,120,255,0.75)', trail:'180,100,255' },
+    { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, core:['#fff','#ffd0ff','#ff3df0','#19f0ff'], halo:['rgba(255,61,240,0.55)','rgba(25,240,255,0.4)'], ring:'rgba(255,255,255,0.85)', trail:'255,200,255' }
+  ];
+  function ownedSkin(id) {
+    if (id === 'cyan') return true;
+    return readLS(SK.skinUnlocked + '.' + id, '0') === '1';
+  }
+  let currentSkinId = readLS(SK.skinUnlocked + '.current', 'cyan');
+  if (!ownedSkin(currentSkinId)) currentSkinId = 'cyan';
+  function currentSkin() { return SKINS.find((s) => s.id === currentSkinId) || SKINS[0]; }
+
+  // ---------- Daily missions (3 active, reset daily) ----------
+  const MISSION_TEMPLATES = [
+    { id: 'score_x',    type: 'final', mk: () => ({ n: 200 + Math.floor(Math.random()*600), goal: 1 }),     label: (m) => 'Atinge ' + m.n + ' scor într-un run', reward: 50 },
+    { id: 'coins_x',    type: 'event', mk: () => ({ n: 20 + Math.floor(Math.random()*30), goal: 20 + Math.floor(Math.random()*30) }), label: (m) => 'Colectează ' + m.goal + ' stele',    reward: 35 },
+    { id: 'combo_x',    type: 'final', mk: () => ({ n: 5 + Math.floor(Math.random()*10), goal: 1 }),       label: (m) => 'Atinge combo ' + m.n,           reward: 40 },
+    { id: 'powerup_x',  type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*3) }),              label: (m) => 'Folosește ' + m.goal + ' power-ups', reward: 35 },
+    { id: 'runs_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*5) }),              label: (m) => 'Joacă ' + m.goal + ' runs',     reward: 45 },
+    { id: 'mystery_x',  type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Deschide ' + m.goal + ' mystery box', reward: 60 },
+    { id: 'level_x',    type: 'final', mk: () => ({ n: 2 + Math.floor(Math.random()*3), goal: 1 }),         label: (m) => 'Ajunge la nivelul ' + (m.n + 1), reward: 55 }
+  ];
+  const MK = { current: SK.skinUnlocked + '.current' };
+  function loadMissions() {
+    const today = todayStr();
+    const saved = (function(){ try { return JSON.parse(readLS(NS + 'missions', 'null')); } catch (_) { return null; } })();
+    if (saved && saved.date === today && saved.list && saved.list.length === 3) return saved.list;
+    // Generate 3 unique missions
+    const pool = MISSION_TEMPLATES.slice().sort(() => Math.random() - 0.5);
+    const list = pool.slice(0, 3).map((tpl) => {
+      const m = Object.assign({ id: tpl.id, reward: tpl.reward, progress: 0, claimed: false, done: false }, tpl.mk());
+      m.label = tpl.label(m);
+      return m;
+    });
+    writeLS(NS + 'missions', JSON.stringify({ date: today, list }));
+    return list;
+  }
+  let missions = loadMissions();
+  function saveMissions() {
+    writeLS(NS + 'missions', JSON.stringify({ date: todayStr(), list: missions }));
+  }
+  function missionEvent(type, value) {
+    let any = false;
+    for (const m of missions) {
+      if (m.done) continue;
+      let inc = 0;
+      if (m.id === 'coins_x' && type === 'coin') inc = 1;
+      else if (m.id === 'powerup_x' && type === 'powerup') inc = 1;
+      else if (m.id === 'runs_x' && type === 'gameover') inc = 1;
+      else if (m.id === 'mystery_x' && type === 'mystery') inc = 1;
+      else if (m.id === 'score_x' && type === 'gameover' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
+      else if (m.id === 'combo_x' && type === 'combo' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
+      else if (m.id === 'level_x' && type === 'level' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
+      if (inc) {
+        m.progress += inc;
+        if (m.progress >= m.goal) { m.progress = m.goal; m.done = true; any = true; }
+      }
+    }
+    if (any) {
+      saveMissions();
+      updateMissionsBadge();
+    }
+  }
+  function updateMissionsBadge() {
+    const dot = document.getElementById('missionsBadge');
+    if (!dot) return;
+    const any = missions.some((m) => m.done && !m.claimed);
+    dot.style.display = any ? 'block' : 'none';
+  }
+
+  // ---------- Screen navigation ----------
+  function showScreen(name) {
+    const ov = document.getElementById('overlay');
+    const sh = document.getElementById('shopOverlay');
+    const mi = document.getElementById('missionsOverlay');
+    const st = document.getElementById('statsOverlay');
+    ov.classList.remove('show');
+    sh.classList.remove('show');
+    mi.classList.remove('show');
+    st.classList.remove('show');
+    if (name === 'home') ov.classList.add('show');
+    else if (name === 'shop') { sh.classList.add('show'); renderShop(); }
+    else if (name === 'missions') { mi.classList.add('show'); renderMissions(); }
+    else if (name === 'stats') { st.classList.add('show'); renderStats(); }
+    document.querySelectorAll('.nav-btn').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-screen') === name);
+    });
+  }
+
+  function renderShop() {
+    const grid = document.getElementById('skinGrid');
+    const cc = document.getElementById('shopCoins');
+    if (cc) cc.textContent = totalCoins;
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (const s of SKINS) {
+      const owned = ownedSkin(s.id);
+      const equipped = s.id === currentSkinId;
+      const div = document.createElement('div');
+      div.className = 'skin-card' + (equipped ? ' equipped' : owned ? ' owned' : ' locked');
+      const previewBg = `radial-gradient(circle at 30% 30%, ${s.core[0]}, ${s.core[2]} 60%, ${s.core[3]})`;
+      const previewGlow = s.halo[0];
+      div.innerHTML = '<div class="skin-preview" style="background:' + previewBg + ';--p-glow:' + previewGlow + '"></div>' +
+        '<div class="skin-name">' + s.name + '</div>' +
+        '<div class="skin-cost ' + (equipped ? 'equipped' : owned ? 'owned' : s.adOnly ? 'ad' : '') + '">' +
+          (equipped ? 'ECHIPAT' : owned ? 'TAP PT ECHIPARE' : s.adOnly ? 'GRATUIT VIA AD' : (s.cost + ' ★')) +
+        '</div>';
+      div.addEventListener('click', () => {
+        if (owned) {
+          currentSkinId = s.id;
+          writeLS(MK.current, s.id);
+          audio.coin();
+          renderShop();
+        } else if (s.adOnly) {
+          // Trigger rewarded ad stub for free skin
+          showRewardedAd(() => {
+            writeLS(SK.skinUnlocked + '.' + s.id, '1');
+            currentSkinId = s.id;
+            writeLS(MK.current, s.id);
+            audio.power();
+            renderShop();
+          });
+        } else if (totalCoins >= s.cost) {
+          totalCoins -= s.cost;
+          writeLS(SK.coins, totalCoins);
+          coinsEl.textContent = totalCoins;
+          writeLS(SK.skinUnlocked + '.' + s.id, '1');
+          currentSkinId = s.id;
+          writeLS(MK.current, s.id);
+          audio.levelup();
+          showToast('🎉 ' + s.name + ' deblocat', 'Skin echipat');
+          renderShop();
+        } else {
+          showToast('Nu ai destule stele', 'Îți trebuie ' + (s.cost - totalCoins) + ' ★');
+        }
+      });
+      grid.appendChild(div);
+    }
+  }
+
+  function renderMissions() {
+    missions = loadMissions(); // pick up daily reset
+    const list = document.getElementById('missionsList');
+    const cc = document.getElementById('missionsCoins');
+    if (cc) cc.textContent = totalCoins;
+    if (!list) return;
+    list.innerHTML = '';
+    for (const m of missions) {
+      const pct = Math.min(100, (m.progress / m.goal) * 100);
+      const div = document.createElement('div');
+      div.className = 'mission' + (m.done ? ' done' : '') + (m.claimed ? ' claimed' : '');
+      div.innerHTML =
+        '<div class="mission-head"><span class="mission-name">' + m.label + '</span>' +
+        '<span class="mission-reward">+' + m.reward + '★</span></div>' +
+        '<div class="mission-bar"><div class="mission-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="mission-progress">' + Math.min(m.progress, m.goal) + ' / ' + m.goal + '</div>' +
+        (m.done && !m.claimed ? '<button class="mission-claim">RIDICĂ +' + m.reward + ' ★</button>' : '');
+      const claim = div.querySelector('.mission-claim');
+      if (claim) claim.addEventListener('click', () => {
+        m.claimed = true;
+        totalCoins += m.reward;
+        writeLS(SK.coins, totalCoins);
+        coinsEl.textContent = totalCoins;
+        saveMissions();
+        audio.coin();
+        showToast('+' + m.reward + ' ★', m.label);
+        renderMissions();
+        updateMissionsBadge();
+      });
+      list.appendChild(div);
+    }
+    // Reset timer
+    const rt = document.getElementById('resetTimer');
+    if (rt) {
+      const d = new Date();
+      const ms = (24 - d.getUTCHours()) * 3600 - d.getUTCMinutes() * 60 - d.getUTCSeconds();
+      const h = Math.floor(ms / 3600), m = Math.floor((ms % 3600) / 60), s = ms % 60;
+      rt.textContent = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }
+  }
+
+  function renderStats() {
+    const cc = document.getElementById('statsCoins');
+    if (cc) cc.textContent = totalCoins;
+    const sb = document.getElementById('sBest'); if (sb) sb.textContent = best;
+    const sr = document.getElementById('sRuns'); if (sr) sr.textContent = totalRuns;
+    const ss = document.getElementById('sStars'); if (ss) ss.textContent = totalCoins;
+    const sk = document.getElementById('sStreak'); if (sk) sk.textContent = parseInt(readLS(SK.loginStreak, '0'), 10) || 0;
+    const list = document.getElementById('achList');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const a of ACHIEVEMENTS) {
+      const unlocked = hasAch(a.id);
+      const div = document.createElement('div');
+      div.className = 'ach-item ' + (unlocked ? 'unlocked' : 'locked');
+      div.innerHTML = '<div class="ach-icon">' + (unlocked ? '🏆' : '🔒') + '</div>' +
+        '<div class="ach-text"><div class="ach-name">' + a.name + '</div><div class="ach-desc">' + a.desc + '</div></div>';
+      list.appendChild(div);
+    }
+  }
+
+  function showRewardedAd(onComplete) {
+    const ov = document.getElementById('adOverlay');
+    const co = document.getElementById('adCountdown');
+    if (!ov) { onComplete(); return; }
+    ov.classList.add('show');
+    let s = 5;
+    if (co) co.textContent = s;
+    const t = setInterval(() => {
+      s--;
+      if (co) co.textContent = s;
+      if (s <= 0) { clearInterval(t); ov.classList.remove('show'); onComplete(); }
+    }, 1000);
+  }
+
+  // Interstitial stub: triggers at natural breaks (every 3rd game over)
+  let interstitialCounter = 0;
+  function maybeShowInterstitial() {
+    interstitialCounter++;
+    if (interstitialCounter >= 3) {
+      interstitialCounter = 0;
+      // In production this is where AdMob.showInterstitial() goes.
+      // For now: brief delay simulates ad close, no UI to avoid annoying users in dev.
+      // Reserve hook only — no actual interstitial in PWA build.
+    }
+  }
+
   function showToast(title, desc) {
     if (!toastEl) return;
     toastEl.querySelector('.t-title').textContent = title;
@@ -502,6 +735,11 @@
   function startGame() {
     overlay.classList.remove('show');
     gameoverEl.classList.remove('show');
+    const ss = document.getElementById('shopOverlay'); if (ss) ss.classList.remove('show');
+    const mm = document.getElementById('missionsOverlay'); if (mm) mm.classList.remove('show');
+    const st = document.getElementById('statsOverlay'); if (st) st.classList.remove('show');
+    const bn = document.getElementById('bottomNav'); if (bn) bn.classList.remove('show');
+    if (doubleCoinsBtn) { doubleCoinsBtn.disabled = false; doubleCoinsBtn.style.display = ''; }
     reset();
     state = STATE.PLAY;
     // Tutorial: show once for new players (flag set first to avoid retrigger on reload)
@@ -592,7 +830,13 @@
     finalBestEl.textContent = best;
     finalCoinsEl.textContent = '+' + earned;
     if (reviveBtn) reviveBtn.style.display = reviveUsed ? 'none' : 'inline-block';
-    setTimeout(() => gameoverEl.classList.add('show'), 280);
+    if (doubleCoinsBtn) { doubleCoinsBtn.disabled = false; doubleCoinsBtn.style.display = earned > 0 ? '' : 'none'; }
+    missionEvent('gameover', score);
+    setTimeout(() => {
+      gameoverEl.classList.add('show');
+      const bn = document.getElementById('bottomNav'); if (bn) bn.classList.add('show');
+    }, 280);
+    maybeShowInterstitial();
     const expColors = ['#ff3df0', '#19f0ff', '#ffe14a'];
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -624,6 +868,37 @@
       else jump();
     }
   });
+  // Bottom navigation
+  document.querySelectorAll('.nav-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      audio.resume();
+      const screen = btn.getAttribute('data-screen');
+      showScreen(screen);
+    });
+  });
+  const bottomNav = document.getElementById('bottomNav');
+  if (bottomNav) bottomNav.classList.add('show');
+  updateMissionsBadge();
+
+  // 2x coins rewarded ad
+  const doubleCoinsBtn = document.getElementById('doubleCoinsBtn');
+  if (doubleCoinsBtn) doubleCoinsBtn.addEventListener('click', () => {
+    audio.resume();
+    if (doubleCoinsBtn.disabled) return;
+    doubleCoinsBtn.disabled = true;
+    doubleCoinsBtn.style.display = 'none';
+    const earned = parseInt((finalCoinsEl.textContent || '+0').replace(/[^0-9]/g, ''), 10) || 0;
+    showRewardedAd(() => {
+      totalCoins += earned;
+      writeLS(SK.coins, totalCoins);
+      coinsEl.textContent = totalCoins;
+      finalCoinsEl.textContent = '+' + (earned * 2);
+      audio.power();
+      popText('+' + earned + ' BONUS', W / 2, GROUND - 240, '#ffe14a', 1.4);
+      showToast('🎉 +' + earned + ' ★', 'Stele dublate');
+    });
+  });
+
   startBtn.addEventListener('click', () => { audio.resume(); dailyMode = false; dailyRng = null; startGame(); });
   retryBtn.addEventListener('click', () => {
     audio.resume();
@@ -813,6 +1088,7 @@
       }
       audio.levelup && audio.levelup();
       flashFrame = frame;
+      missionEvent('level', levelIdx);
     }
   }
 
@@ -999,6 +1275,7 @@
       if (dx * dx + dy * dy < (c.r + 24) * (c.r + 24)) {
         c.picked = true;
         runCoins++;
+        missionEvent('coin');
         if (frame - lastCoinFrame < COMBO_WINDOW) combo++;
         else combo = 1;
         lastCoinFrame = frame;
@@ -1009,6 +1286,7 @@
         if (combo === 5 || combo === 10 || combo === 20) {
           popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
           shake = Math.max(shake, 4);
+          missionEvent('combo', combo);
         }
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * Math.PI * 2;
@@ -1042,6 +1320,7 @@
           popText('SHIELD', p.x, p.y - 20, '#19f0ff', 1.2);
         }
         audio.power && audio.power();
+        missionEvent('powerup');
         const pcol = p.type === 'magnet' ? '#ffe14a' : '#19f0ff';
         for (let i = 0; i < 16; i++) {
           const a = Math.random() * Math.PI * 2;
@@ -1226,14 +1505,15 @@
   }
 
   function drawPlayer() {
-    // Trail — soft glow without shadowBlur
+    const sk = currentSkin();
+    // Trail — soft glow without shadowBlur (skin-tinted)
     for (let i = 0; i < player.trail.length; i++) {
       const t = player.trail[i];
       const a = Math.max(0, t.life / 20);
       const r = 18 * a;
       const grad = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, r);
-      grad.addColorStop(0, `rgba(120, 230, 255, ${a * 0.5})`);
-      grad.addColorStop(1, 'rgba(120, 230, 255, 0)');
+      grad.addColorStop(0, 'rgba(' + sk.trail + ', ' + (a * 0.5) + ')');
+      grad.addColorStop(1, 'rgba(' + sk.trail + ', 0)');
       ctx.fillStyle = grad;
       ctx.fillRect(t.x - r, t.y - r, r * 2, r * 2);
     }
@@ -1243,30 +1523,30 @@
     const baseR = 22;
     const pulse = 1 + Math.sin(frame * 0.18) * 0.06;
 
-    // Outer glow halo
+    // Outer glow halo (skin-tinted)
     const glowR = baseR * 2.2 * pulse;
     const halo = ctx.createRadialGradient(cx, cy, baseR * 0.6, cx, cy, glowR);
-    halo.addColorStop(0, 'rgba(120, 230, 255, 0.55)');
-    halo.addColorStop(0.55, 'rgba(255, 80, 220, 0.18)');
-    halo.addColorStop(1, 'rgba(255, 80, 220, 0)');
+    halo.addColorStop(0, sk.halo[0]);
+    halo.addColorStop(0.55, sk.halo[1]);
+    halo.addColorStop(1, sk.halo[1].replace(/0\.\d+\)$/, '0)'));
     ctx.fillStyle = halo;
     ctx.fillRect(cx - glowR, cy - glowR, glowR * 2, glowR * 2);
 
     // Orbital ring — counter-rotates while in air for "spin" feel
     if (!player.onGround) {
-      ctx.strokeStyle = 'rgba(255, 90, 220, 0.6)';
+      ctx.strokeStyle = sk.ring;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.ellipse(cx, cy, baseR * 1.4, baseR * 0.45, player.rot, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Core body — bright cyan filled circle
+    // Core body (skin-tinted)
     const core = ctx.createRadialGradient(cx - baseR * 0.3, cy - baseR * 0.3, 0, cx, cy, baseR);
-    core.addColorStop(0, '#ffffff');
-    core.addColorStop(0.3, '#a8f6ff');
-    core.addColorStop(0.7, '#19f0ff');
-    core.addColorStop(1, '#0b94ad');
+    core.addColorStop(0,   sk.core[0]);
+    core.addColorStop(0.3, sk.core[1]);
+    core.addColorStop(0.7, sk.core[2]);
+    core.addColorStop(1,   sk.core[3]);
     ctx.fillStyle = core;
     ctx.beginPath();
     ctx.arc(cx, cy, baseR * pulse, 0, Math.PI * 2);
