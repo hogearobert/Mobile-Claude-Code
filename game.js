@@ -463,18 +463,20 @@
 
   // ---------- Screen navigation ----------
   function showScreen(name) {
-    const ov = document.getElementById('overlay');
-    const sh = document.getElementById('shopOverlay');
-    const mi = document.getElementById('missionsOverlay');
-    const st = document.getElementById('statsOverlay');
-    ov.classList.remove('show');
-    sh.classList.remove('show');
-    mi.classList.remove('show');
-    st.classList.remove('show');
-    if (name === 'home') ov.classList.add('show');
-    else if (name === 'shop') { sh.classList.add('show'); renderShop(); }
-    else if (name === 'missions') { mi.classList.add('show'); renderMissions(); }
-    else if (name === 'stats') { st.classList.add('show'); renderStats(); }
+    // Hide ALL overlays — main menu, shop, missions, stats, game over, ad
+    document.querySelectorAll('.overlay').forEach((o) => o.classList.remove('show'));
+    if (name === 'home') {
+      document.getElementById('overlay').classList.add('show');
+    } else if (name === 'shop') {
+      document.getElementById('shopOverlay').classList.add('show');
+      renderShop();
+    } else if (name === 'missions') {
+      document.getElementById('missionsOverlay').classList.add('show');
+      renderMissions();
+    } else if (name === 'stats') {
+      document.getElementById('statsOverlay').classList.add('show');
+      renderStats();
+    }
     document.querySelectorAll('.nav-btn').forEach((b) => {
       b.classList.toggle('active', b.getAttribute('data-screen') === name);
     });
