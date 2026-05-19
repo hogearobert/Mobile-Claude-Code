@@ -446,8 +446,6 @@
     audio.hit();
     setTimeout(() => audio.over(), 220);
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
-    glitchFrame = frame;
-    flashFrame = frame;
     if (dailyMode) {
       if (score > dailyBest) {
         dailyBest = score;
