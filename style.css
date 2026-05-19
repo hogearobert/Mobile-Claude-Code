@@ -676,7 +676,9 @@ html, body {
   display: none;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  /* Top 24px for HUD breathing room, bottom 120px clears the nav bar so
+     content centers in the visible play area (not the absolute screen). */
+  padding: 24px 24px 120px;
   background: radial-gradient(ellipse at center, rgba(7,9,26,0.4) 0%, rgba(7,9,26,0.85) 100%);
   z-index: 10;
 }
