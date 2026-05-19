@@ -1248,6 +1248,7 @@
     shake = 6;
     if (reviveBtn) reviveBtn.style.display = 'none';
     state = STATE.PLAY;
+    music.start(levelIdx);
     audio.power();
     popText('REVIVED!', player.x + player.w / 2, GROUND - 200, '#19f0ff', 1.4);
     unlock('revive');
