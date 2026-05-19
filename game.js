@@ -63,6 +63,16 @@
         setTimeout(() => blip(330, 0.18, 'sawtooth', 0.28), 130);
         setTimeout(() => blip(220, 0.5, 'sawtooth', 0.3, 110), 260);
       },
+      power() {
+        blip(523, 0.08, 'triangle', 0.25);
+        setTimeout(() => blip(784, 0.1, 'triangle', 0.22), 60);
+        setTimeout(() => blip(1046, 0.14, 'sine', 0.22), 120);
+      },
+      levelup() {
+        blip(440, 0.1, 'square', 0.2);
+        setTimeout(() => blip(660, 0.1, 'square', 0.2), 80);
+        setTimeout(() => blip(880, 0.2, 'sine', 0.25), 160);
+      },
       toggle() {
         muted = !muted;
         localStorage.setItem('neon-dash-mute', muted ? '1' : '0');
@@ -153,9 +163,43 @@
   let frame = 0;
   let nextObstacleAt = 60;
   let nextCoinAt = 90;
+  let nextPowerupAt = 600;
   let shake = 0;
   let lastJumpFrame = -100;
   let inputGraceUntil = 0;
+
+  // ---------- Levels (palette + difficulty) ----------
+  const LEVELS = [
+    { name: 'ORIGIN',  sky: ['#0a0e2a', '#1a0a2e', '#2a0a3a'], sun: '#ff3df0', sunRGB: '255,80,200',  mountainHue: 280, accent: '25,240,255',  ground: '#06081a' },
+    { name: 'INFERNO', sky: ['#1a0612', '#3d0a1f', '#5a0f2a'], sun: '#ff7a3d', sunRGB: '255,150,80',  mountainHue: 20,  accent: '255,180,80',  ground: '#1a0612' },
+    { name: 'VERDANT', sky: ['#06140a', '#0a3d1f', '#0a5a2a'], sun: '#3dff7a', sunRGB: '100,255,160', mountainHue: 130, accent: '120,255,180', ground: '#06140a' },
+    { name: 'GLACIAL', sky: ['#06141f', '#0a2a3d', '#0a3d52'], sun: '#3df0ff', sunRGB: '100,230,255', mountainHue: 200, accent: '120,200,255', ground: '#06141f' },
+    { name: 'CRIMSON', sky: ['#1a0608', '#3d0a14', '#5a0a14'], sun: '#ff0a3d', sunRGB: '255,60,90',   mountainHue: 350, accent: '255,80,80',   ground: '#1a0608' },
+    { name: 'SOLAR',   sky: ['#1a1408', '#3d2e0f', '#5a4a0a'], sun: '#ffe14a', sunRGB: '255,225,100', mountainHue: 45,  accent: '255,225,100', ground: '#1a1408' }
+  ];
+  const LEVEL_SCORE = 500;
+  let levelIdx = 0;
+  let palette = LEVELS[0];
+
+  // ---------- Combo ----------
+  let combo = 0;
+  let lastCoinFrame = -1000;
+  const COMBO_WINDOW = 90; // ~1.5s at 60fps
+  function comboMult() { return combo >= 10 ? 3 : combo >= 5 ? 2 : 1; }
+
+  // ---------- Power-ups ----------
+  let powerups = [];
+  let magnetFrames = 0;
+  let shieldActive = false;
+  let shieldFlashFrame = -1000;
+  let invincibleUntil = -1;
+  let reviveUsed = false;
+
+  // ---------- Floating texts ----------
+  let texts = [];
+  function popText(msg, x, y, color, scale) {
+    texts.push({ msg, x, y, color: color || '#ffe14a', scale: scale || 1, life: 50 });
+  }
 
   // ---------- Init parallax ----------
   function initParallax() {
@@ -209,11 +253,27 @@
     frame = 0;
     nextObstacleAt = 60;
     nextCoinAt = 90;
+    nextPowerupAt = 600;
     shake = 0;
     lastJumpFrame = -100;
     inputGraceUntil = 15;
+    levelIdx = 0;
+    palette = LEVELS[0];
+    skyGradient = null;
+    skyGradientH = -1;
+    combo = 0;
+    lastCoinFrame = -1000;
+    powerups = [];
+    magnetFrames = 0;
+    shieldActive = false;
+    shieldFlashFrame = -1000;
+    invincibleUntil = -1;
+    reviveUsed = false;
+    texts = [];
     scoreEl.textContent = '0';
     coinsEl.textContent = totalCoins;
+    if (levelEl) levelEl.textContent = palette.name;
+    if (comboEl) comboEl.textContent = '';
     initParallax();
   }
 
@@ -259,11 +319,13 @@
       bestEl.textContent = best;
     }
     totalCoins += runCoins;
+    runCoins = 0;
     localStorage.setItem('neon-dash-coins', totalCoins);
     coinsEl.textContent = totalCoins;
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
     finalCoinsEl.textContent = '+' + runCoins;
+    if (reviveBtn) reviveBtn.style.display = reviveUsed ? 'none' : 'inline-block';
     setTimeout(() => gameoverEl.classList.add('show'), 280);
     // explosion
     for (let i = 0; i < 40; i++) {
@@ -304,6 +366,11 @@
 
   const muteBtn = document.getElementById('muteBtn');
   const pauseBtn = document.getElementById('pauseBtn');
+  const levelEl = document.getElementById('level');
+  const comboEl = document.getElementById('combo');
+  const reviveBtn = document.getElementById('reviveBtn');
+  const adOverlay = document.getElementById('adOverlay');
+  const adCountdown = document.getElementById('adCountdown');
   function refreshMuteIcon() { if (muteBtn) muteBtn.textContent = audio.isMuted() ? '🔇' : '🔊'; }
   refreshMuteIcon();
   if (muteBtn) muteBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.resume(); audio.toggle(); refreshMuteIcon(); });
@@ -312,6 +379,42 @@
     if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; }
     else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 8; }
   });
+
+  if (reviveBtn) reviveBtn.addEventListener('click', () => {
+    audio.resume();
+    if (reviveUsed) return;
+    if (!adOverlay) { doRevive(); return; }
+    gameoverEl.classList.remove('show');
+    adOverlay.classList.add('show');
+    let secs = 5;
+    if (adCountdown) adCountdown.textContent = secs;
+    const tick = setInterval(() => {
+      secs--;
+      if (adCountdown) adCountdown.textContent = secs;
+      if (secs <= 0) {
+        clearInterval(tick);
+        adOverlay.classList.remove('show');
+        doRevive();
+      }
+    }, 1000);
+  });
+
+  function doRevive() {
+    reviveUsed = true;
+    obstacles = obstacles.filter((o) => o.x > W * 0.55);
+    powerups = powerups.filter((p) => p.x > W * 0.55);
+    player.y = GROUND - player.h - 40;
+    player.vy = -8;
+    player.jumps = 0;
+    player.onGround = false;
+    invincibleUntil = frame + 120;
+    inputGraceUntil = frame + 10;
+    shake = 6;
+    if (reviveBtn) reviveBtn.style.display = 'none';
+    state = STATE.PLAY;
+    audio.power();
+    popText('REVIVED!', player.x + player.w / 2, GROUND - 200, '#19f0ff', 1.4);
+  }
 
   // ---------- Spawning ----------
   function spawnObstacle() {
@@ -334,20 +437,57 @@
     const pattern = Math.floor(Math.random() * 3);
     const baseY = GROUND - 80 - Math.random() * 100;
     if (pattern === 0) {
-      // single
       coinsArr.push({ x: W + 30, y: baseY, r: 14, picked: false, t: Math.random() * Math.PI * 2 });
     } else if (pattern === 1) {
-      // arc of 5
       for (let i = 0; i < 5; i++) {
         const px = W + 30 + i * 36;
         const py = baseY - Math.sin((i / 4) * Math.PI) * 60;
         coinsArr.push({ x: px, y: py, r: 14, picked: false, t: Math.random() * Math.PI * 2 });
       }
     } else {
-      // line of 4
       for (let i = 0; i < 4; i++) {
         coinsArr.push({ x: W + 30 + i * 32, y: baseY, r: 14, picked: false, t: Math.random() * Math.PI * 2 });
       }
+    }
+  }
+
+  function spawnPowerup() {
+    const types = ['magnet', 'shield'];
+    const t = types[Math.floor(Math.random() * types.length)];
+    powerups.push({
+      type: t,
+      x: W + 30,
+      y: GROUND - 100 - Math.random() * 60,
+      r: 22,
+      t: 0,
+      picked: false
+    });
+  }
+
+  function tryLevelUp() {
+    const target = Math.min(LEVELS.length - 1, Math.floor(score / LEVEL_SCORE));
+    if (target !== levelIdx) {
+      levelIdx = target;
+      palette = LEVELS[levelIdx];
+      skyGradient = null;
+      skyGradientH = -1;
+      shake = Math.max(shake, 8);
+      popText('LEVEL ' + (levelIdx + 1) + ' · ' + palette.name, W / 2, GROUND - 180, palette.sun, 1.4);
+      if (levelEl) levelEl.textContent = palette.name;
+      for (let i = 0; i < 30; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = Math.random() * 5 + 2;
+        particles.push({
+          x: player.x + player.w / 2,
+          y: player.y + player.h / 2,
+          vx: Math.cos(a) * v,
+          vy: Math.sin(a) * v,
+          life: 50,
+          color: palette.sun,
+          r: Math.random() * 3 + 1
+        });
+      }
+      audio.levelup && audio.levelup();
     }
   }
 
@@ -385,24 +525,55 @@
     // Spawn
     if (frame >= nextObstacleAt) {
       spawnObstacle();
-      const gap = Math.max(45, 95 - score / 4);
+      const gap = Math.max(45, 95 - score / 8 - levelIdx * 3);
       nextObstacleAt = frame + gap + Math.random() * 30;
     }
     if (frame >= nextCoinAt) {
       spawnCoin();
       nextCoinAt = frame + 90 + Math.random() * 80;
     }
+    if (frame >= nextPowerupAt) {
+      spawnPowerup();
+      nextPowerupAt = frame + 900 + Math.random() * 600;
+    }
 
     // Move obstacles
     obstacles.forEach((o) => (o.x -= speed));
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
 
-    // Move coins
+    // Move coins (with magnet pull if active)
+    const pcx = player.x + player.w / 2;
+    const pcy = player.y + player.h / 2;
     coinsArr.forEach((c) => {
       c.x -= speed;
       c.t += 0.15;
+      if (magnetFrames > 0) {
+        const dx = pcx - c.x;
+        const dy = pcy - c.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 200 * 200) {
+          const f = 0.12;
+          c.x += dx * f;
+          c.y += dy * f;
+        }
+      }
     });
     coinsArr = coinsArr.filter((c) => c.x > -30 && !c.picked);
+
+    // Move powerups
+    powerups.forEach((p) => { p.x -= speed; p.t += 0.08; });
+    powerups = powerups.filter((p) => p.x > -40 && !p.picked);
+
+    // Decay magnet
+    if (magnetFrames > 0) magnetFrames--;
+    // Combo decay
+    if (combo > 0 && frame - lastCoinFrame > COMBO_WINDOW) {
+      combo = 0;
+      if (comboEl) comboEl.textContent = '';
+    }
+    // Floating texts
+    texts.forEach((t) => { t.y -= 0.8; t.life--; });
+    texts = texts.filter((t) => t.life > 0);
 
     // Parallax move
     stars.forEach((s) => {
@@ -447,39 +618,87 @@
     const pw = player.w - 20;
     const ph = player.h - 12;
 
-    for (const o of obstacles) {
-      if (px < o.x + o.w && px + pw > o.x && py < o.y + o.h && py + ph > o.y) {
-        gameOver();
-        return;
+    if (frame > invincibleUntil) {
+      for (const o of obstacles) {
+        if (px < o.x + o.w && px + pw > o.x && py < o.y + o.h && py + ph > o.y) {
+          if (shieldActive) {
+            shieldActive = false;
+            shieldFlashFrame = frame;
+            invincibleUntil = frame + 60;
+            o.x = -999;
+            shake = Math.max(shake, 10);
+            audio.hit();
+            popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.2);
+            if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_) {} }
+            break;
+          }
+          gameOver();
+          return;
+        }
       }
     }
     for (const c of coinsArr) {
-      const dx = c.x - (player.x + player.w / 2);
-      const dy = c.y - (player.y + player.h / 2);
+      const dx = c.x - pcx;
+      const dy = c.y - pcy;
       if (dx * dx + dy * dy < (c.r + 24) * (c.r + 24)) {
         c.picked = true;
         runCoins++;
-        score += 5;
+        if (frame - lastCoinFrame < COMBO_WINDOW) combo++;
+        else combo = 1;
+        lastCoinFrame = frame;
+        const m = comboMult();
+        score += 5 * m;
         audio.coin();
-        // sparkle
+        if (comboEl) comboEl.textContent = combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '';
+        if (combo === 5 || combo === 10 || combo === 20) {
+          popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
+          shake = Math.max(shake, 4);
+        }
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * Math.PI * 2;
           const v = Math.random() * 3 + 1;
           particles.push({
-            x: c.x,
-            y: c.y,
+            x: c.x, y: c.y,
             vx: Math.cos(a) * v,
             vy: Math.sin(a) * v - 1,
-            life: 24,
-            color: '#ffe14a',
-            r: Math.random() * 2 + 1
+            life: 24, color: '#ffe14a', r: Math.random() * 2 + 1
+          });
+        }
+      }
+    }
+    // Powerup pickups
+    for (const p of powerups) {
+      if (p.picked) continue;
+      const dx = p.x - pcx;
+      const dy = p.y - pcy;
+      if (dx * dx + dy * dy < (p.r + 26) * (p.r + 26)) {
+        p.picked = true;
+        if (p.type === 'magnet') {
+          magnetFrames = 60 * 8;
+          popText('MAGNET 8s', p.x, p.y - 20, '#ffe14a', 1.2);
+        } else if (p.type === 'shield') {
+          shieldActive = true;
+          popText('SHIELD', p.x, p.y - 20, '#19f0ff', 1.2);
+        }
+        audio.power && audio.power();
+        for (let i = 0; i < 16; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const v = Math.random() * 4 + 2;
+          particles.push({
+            x: p.x, y: p.y,
+            vx: Math.cos(a) * v,
+            vy: Math.sin(a) * v,
+            life: 40,
+            color: p.type === 'magnet' ? '#ffe14a' : '#19f0ff',
+            r: Math.random() * 3 + 1
           });
         }
       }
     }
 
     score += 1;
-    if (frame % 6 === 0) scoreEl.textContent = score;
+    tryLevelUp();
+    if (frame % 4 === 0) scoreEl.textContent = score;
 
     if (shake > 0) shake *= 0.9;
   }
@@ -487,13 +706,15 @@
   // ---------- Draw ----------
   let skyGradient = null;
   let skyGradientH = -1;
+  let skyGradientPal = null;
   function drawBackground() {
-    if (skyGradientH !== H) {
+    if (skyGradientH !== H || skyGradientPal !== palette) {
       skyGradient = ctx.createLinearGradient(0, 0, 0, H);
-      skyGradient.addColorStop(0, '#0a0e2a');
-      skyGradient.addColorStop(0.6, '#1a0a2e');
-      skyGradient.addColorStop(1, '#2a0a3a');
+      skyGradient.addColorStop(0, palette.sky[0]);
+      skyGradient.addColorStop(0.6, palette.sky[1]);
+      skyGradient.addColorStop(1, palette.sky[2]);
       skyGradientH = H;
+      skyGradientPal = palette;
     }
     ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, W, H);
@@ -511,32 +732,31 @@
     const cx = W * 0.78;
     const cy = GROUND - 280;
     const sunG = ctx.createRadialGradient(cx, cy, 5, cx, cy, 80);
-    sunG.addColorStop(0, 'rgba(255, 80, 200, 0.9)');
-    sunG.addColorStop(0.5, 'rgba(255, 80, 200, 0.3)');
-    sunG.addColorStop(1, 'rgba(255, 80, 200, 0)');
+    sunG.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0.9)');
+    sunG.addColorStop(0.5, 'rgba(' + palette.sunRGB + ', 0.3)');
+    sunG.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0)');
     ctx.fillStyle = sunG;
     ctx.fillRect(cx - 80, cy - 80, 160, 160);
-    ctx.fillStyle = '#ff3df0';
+    ctx.fillStyle = palette.sun;
     ctx.beginPath();
     ctx.arc(cx, cy, 38, 0, Math.PI * 2);
     ctx.fill();
-    // sun bands
-    ctx.fillStyle = '#0a0e2a';
+    ctx.fillStyle = palette.sky[0];
     for (let i = 0; i < 5; i++) {
       ctx.fillRect(cx - 38, cy - 24 + i * 16, 76, 4);
     }
 
     // Mountains
+    const mh = palette.mountainHue;
     for (const m of mountains) {
-      ctx.fillStyle = `hsl(${m.hue}, 50%, 14%)`;
+      ctx.fillStyle = `hsl(${mh + (m.hue - 280) * 0.3}, 50%, 14%)`;
       ctx.beginPath();
       ctx.moveTo(m.x, GROUND);
       ctx.lineTo(m.x + m.w / 2, GROUND - m.h);
       ctx.lineTo(m.x + m.w, GROUND);
       ctx.closePath();
       ctx.fill();
-      // neon edge
-      ctx.strokeStyle = `hsla(${m.hue + 40}, 90%, 60%, 0.5)`;
+      ctx.strokeStyle = `hsla(${mh + 40}, 90%, 60%, 0.5)`;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(m.x, GROUND);
@@ -547,9 +767,9 @@
 
     // Buildings (closer parallax)
     for (const b of buildings) {
-      ctx.fillStyle = '#06081a';
+      ctx.fillStyle = palette.ground;
       ctx.fillRect(b.x, GROUND - b.h, b.w, b.h);
-      ctx.strokeStyle = 'rgba(25, 240, 255, 0.4)';
+      ctx.strokeStyle = 'rgba(' + palette.accent + ', 0.4)';
       ctx.lineWidth = 1;
       ctx.strokeRect(b.x + 0.5, GROUND - b.h + 0.5, b.w - 1, b.h - 1);
       if (b.windows) {
@@ -564,19 +784,17 @@
   }
 
   function drawGround() {
-    // Ground base
-    ctx.fillStyle = '#06081a';
+    ctx.fillStyle = palette.ground;
     ctx.fillRect(0, GROUND, W, H - GROUND);
 
-    // Grid lines (perspective-ish)
-    ctx.strokeStyle = 'rgba(255, 61, 240, 0.5)';
+    ctx.strokeStyle = palette.sun;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, GROUND);
     ctx.lineTo(W, GROUND);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(25, 240, 255, 0.18)';
+    ctx.strokeStyle = 'rgba(' + palette.accent + ', 0.18)';
     ctx.lineWidth = 1;
     const offset = scrollX % 40;
     for (let x = -offset; x < W; x += 40) {
@@ -645,6 +863,77 @@
     ctx.beginPath();
     ctx.arc(cx - baseR * 0.25, cy - baseR * 0.25, baseR * 0.25, 0, Math.PI * 2);
     ctx.fill();
+
+    // Magnet field
+    if (magnetFrames > 0) {
+      const mr = 60 + (Math.sin(frame * 0.15) * 8);
+      ctx.strokeStyle = 'rgba(255, 225, 74, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, mr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255, 225, 74, 0.18)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, mr + 14, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Shield aura
+    if (shieldActive || frame - shieldFlashFrame < 30) {
+      const flash = frame - shieldFlashFrame < 30 ? 1 - (frame - shieldFlashFrame) / 30 : 1;
+      const sr = baseR * 1.9 + Math.sin(frame * 0.18) * 3;
+      const sg = ctx.createRadialGradient(cx, cy, baseR, cx, cy, sr);
+      sg.addColorStop(0, 'rgba(120, 230, 255, 0)');
+      sg.addColorStop(0.7, 'rgba(120, 230, 255, ' + (0.25 * flash) + ')');
+      sg.addColorStop(1, 'rgba(120, 230, 255, ' + (0.55 * flash) + ')');
+      ctx.fillStyle = sg;
+      ctx.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
+    }
+
+    // Invincibility blink
+    if (frame < invincibleUntil && Math.floor(frame / 4) % 2 === 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, baseR * 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawPowerups() {
+    for (const p of powerups) {
+      const float = Math.sin(p.t * 2) * 4;
+      const px = p.x;
+      const py = p.y + float;
+      // glow
+      const g = ctx.createRadialGradient(px, py, 0, px, py, p.r * 1.8);
+      const col = p.type === 'magnet' ? '255, 225, 74' : '25, 240, 255';
+      g.addColorStop(0, 'rgba(' + col + ', 0.6)');
+      g.addColorStop(1, 'rgba(' + col + ', 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(px - p.r * 1.8, py - p.r * 1.8, p.r * 3.6, p.r * 3.6);
+      ctx.fillStyle = 'rgba(' + col + ', 1)';
+      ctx.beginPath();
+      ctx.arc(px, py, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#07091a';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.type === 'magnet' ? '🧲' : '🛡', px, py + 2);
+    }
+  }
+
+  function drawTexts() {
+    for (const t of texts) {
+      const a = Math.min(1, t.life / 40);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = t.color;
+      ctx.font = 'bold ' + Math.round(22 * t.scale) + 'px -apple-system, "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t.msg, t.x, t.y);
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawObstacles() {
@@ -732,9 +1021,11 @@
     drawBackground();
     drawGround();
     drawCoins();
+    drawPowerups();
     drawParticles();
     drawObstacles();
     drawPlayer();
+    drawTexts();
     ctx.restore();
   }
 

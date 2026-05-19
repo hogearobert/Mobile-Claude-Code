@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
   <div id="app">
@@ -31,6 +31,10 @@
           <span class="label">★</span>
           <span id="coins">0</span>
         </div>
+      </div>
+      <div class="hud-row sub">
+        <div class="chip level"><span id="level">ORIGIN</span></div>
+        <div class="chip combo" id="combo"></div>
       </div>
     </div>
     <div id="controls">
@@ -55,12 +59,25 @@
           <div><span class="label">Record</span><span id="finalBest">0</span></div>
           <div><span class="label">Stele</span><span id="finalCoins">0</span></div>
         </div>
-        <button id="retryBtn" class="btn">REJOACĂ</button>
+        <button id="reviveBtn" class="btn revive">▶ REVIVE GRATUIT</button>
+        <p class="ad-hint">Vezi o reclamă scurtă (5s) pentru a continua</p>
+        <button id="retryBtn" class="btn secondary">REJOACĂ</button>
+      </div>
+    </div>
+
+    <div id="adOverlay" class="overlay ad">
+      <div class="panel">
+        <div class="ad-tag">RECLAMĂ</div>
+        <div class="ad-art">
+          <div class="ad-orb"></div>
+          <p class="ad-copy">Mulțumim că susții jocul!</p>
+        </div>
+        <p class="ad-timer">Continuă în <span id="adCountdown">5</span>s…</p>
       </div>
     </div>
   </div>
 
-  <script src="game.js?v=8"></script>
+  <script src="game.js?v=9"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

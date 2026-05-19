@@ -119,6 +119,117 @@ html, body {
 }
 .ctrl:active { transform: scale(0.92); }
 
+.hud-row.sub {
+  margin-top: 8px;
+  gap: 8px;
+}
+
+.chip {
+  background: rgba(11, 16, 32, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 61, 240, 0.35);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--neon-pink);
+  min-height: 22px;
+}
+
+.chip.combo {
+  border-color: rgba(255, 225, 74, 0.4);
+  color: var(--neon-yellow);
+  min-width: 56px;
+  text-align: center;
+}
+
+.chip.combo:empty {
+  visibility: hidden;
+}
+
+.btn.revive {
+  background: linear-gradient(135deg, #19f0ff, #3df0a0);
+  margin-bottom: 8px;
+  display: block;
+  width: 100%;
+  font-size: 16px;
+  letter-spacing: 1px;
+  padding: 14px 24px;
+}
+
+.btn.secondary {
+  background: rgba(11, 16, 32, 0.6);
+  color: var(--text);
+  border: 1px solid rgba(25, 240, 255, 0.4);
+  box-shadow: none;
+  font-size: 14px;
+  padding: 12px 32px;
+  margin-top: 4px;
+}
+
+.ad-hint {
+  font-size: 10px;
+  opacity: 0.65;
+  margin: 0 0 16px;
+}
+
+.overlay.ad .panel {
+  background: rgba(7, 9, 26, 0.92);
+  border: 1px solid rgba(25, 240, 255, 0.3);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 0 40px rgba(255, 61, 240, 0.25);
+}
+
+.ad-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 12px;
+}
+
+.ad-art {
+  padding: 24px 12px;
+  background: linear-gradient(135deg, rgba(25, 240, 255, 0.08), rgba(255, 61, 240, 0.08));
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.ad-orb {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fff 0%, #19f0ff 40%, #ff3df0 100%);
+  animation: orbPulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 32px rgba(25, 240, 255, 0.5);
+}
+
+@keyframes orbPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.ad-copy {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.ad-timer {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 0;
+}
+.ad-timer span {
+  color: var(--neon-cyan);
+  font-weight: 800;
+  font-size: 16px;
+}
+
 .overlay {
   position: absolute;
   inset: 0;
