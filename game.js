@@ -1062,13 +1062,27 @@
     sunG.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0)');
     ctx.fillStyle = sunG;
     ctx.fillRect(cx - 80, cy - 80, 160, 160);
-    ctx.fillStyle = palette.sun;
+    // Synthwave sun: solid top, banded bottom (the iconic "rising sun" look)
+    const sunR = 38;
+    const grad = ctx.createLinearGradient(0, cy - sunR, 0, cy + sunR);
+    grad.addColorStop(0, palette.sun);
+    grad.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0.85)');
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(cx, cy, 38, 0, Math.PI * 2);
+    ctx.arc(cx, cy, sunR, 0, Math.PI * 2);
     ctx.fill();
+    // 4 bottom bands — progressively thicker, only across the lower 60% of sun
     ctx.fillStyle = palette.sky[0];
-    for (let i = 0; i < 5; i++) {
-      ctx.fillRect(cx - 38, cy - 24 + i * 16, 76, 4);
+    const bands = [
+      { y: cy + 4,  h: 2.5 },
+      { y: cy + 11, h: 3 },
+      { y: cy + 19, h: 3.5 },
+      { y: cy + 28, h: 4 }
+    ];
+    for (const b of bands) {
+      const dy = b.y - cy;
+      const w = Math.sqrt(Math.max(0, sunR * sunR - dy * dy)) * 2;
+      ctx.fillRect(cx - w / 2, b.y, w, b.h);
     }
 
     // Mountains
