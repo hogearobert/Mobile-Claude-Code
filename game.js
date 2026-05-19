@@ -1053,37 +1053,72 @@
       ctx.fill();
     }
 
-    // Sun/moon
+    // ── Synthwave sun (iconic Outrun look: solid top, banded bottom, multi-color gradient) ──
     const cx = W * 0.78;
     const cy = GROUND - 280;
-    const sunG = ctx.createRadialGradient(cx, cy, 5, cx, cy, 80);
-    sunG.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0.9)');
-    sunG.addColorStop(0.5, 'rgba(' + palette.sunRGB + ', 0.3)');
-    sunG.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0)');
-    ctx.fillStyle = sunG;
-    ctx.fillRect(cx - 80, cy - 80, 160, 160);
-    // Synthwave sun: solid top, banded bottom (the iconic "rising sun" look)
-    const sunR = 38;
-    const grad = ctx.createLinearGradient(0, cy - sunR, 0, cy + sunR);
-    grad.addColorStop(0, palette.sun);
-    grad.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0.85)');
-    ctx.fillStyle = grad;
+    const sunR = 48;
+    const pulse = 1 + Math.sin(frame * 0.04) * 0.025;
+    const R = sunR * pulse;
+
+    // Outer atmospheric glow (3 stacked halos, additive)
+    ctx.globalCompositeOperation = 'lighter';
+    const halo1 = ctx.createRadialGradient(cx, cy, R * 0.4, cx, cy, R * 3.4);
+    halo1.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0.55)');
+    halo1.addColorStop(0.4, 'rgba(' + palette.sunRGB + ', 0.18)');
+    halo1.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0)');
+    ctx.fillStyle = halo1;
+    ctx.fillRect(cx - R * 3.4, cy - R * 3.4, R * 6.8, R * 6.8);
+    const halo2 = ctx.createRadialGradient(cx, cy, R * 0.6, cx, cy, R * 1.7);
+    halo2.addColorStop(0, 'rgba(255, 200, 120, 0.35)');
+    halo2.addColorStop(1, 'rgba(255, 200, 120, 0)');
+    ctx.fillStyle = halo2;
+    ctx.fillRect(cx - R * 1.7, cy - R * 1.7, R * 3.4, R * 3.4);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Sun body with rich vertical gradient (top bright → bottom saturated)
+    const body = ctx.createLinearGradient(0, cy - R, 0, cy + R);
+    body.addColorStop(0,    '#fffbe6');
+    body.addColorStop(0.18, '#ffe14a');
+    body.addColorStop(0.5,  palette.sun);
+    body.addColorStop(0.82, 'rgba(' + palette.sunRGB + ', 0.95)');
+    body.addColorStop(1,    'rgba(' + palette.sunRGB + ', 0.55)');
+    ctx.fillStyle = body;
     ctx.beginPath();
-    ctx.arc(cx, cy, sunR, 0, Math.PI * 2);
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fill();
-    // 4 bottom bands — progressively thicker, only across the lower 60% of sun
+
+    // Subtle inner highlight (gives 3D feel)
+    const hl = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, 0, cx - R * 0.35, cy - R * 0.4, R * 0.9);
+    hl.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+    hl.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = hl;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Iconic bottom bands — tapered to sun silhouette, progressively thicker
     ctx.fillStyle = palette.sky[0];
-    const bands = [
-      { y: cy + 4,  h: 2.5 },
-      { y: cy + 11, h: 3 },
-      { y: cy + 19, h: 3.5 },
-      { y: cy + 28, h: 4 }
+    const bandDefs = [
+      { d: 0.08, h: 2 },
+      { d: 0.22, h: 2.6 },
+      { d: 0.38, h: 3.2 },
+      { d: 0.56, h: 3.8 },
+      { d: 0.78, h: 4.4 }
     ];
-    for (const b of bands) {
-      const dy = b.y - cy;
-      const w = Math.sqrt(Math.max(0, sunR * sunR - dy * dy)) * 2;
-      ctx.fillRect(cx - w / 2, b.y, w, b.h);
+    for (const b of bandDefs) {
+      const by = cy + R * b.d;
+      const dy = by - cy;
+      const w = Math.sqrt(Math.max(0, R * R - dy * dy)) * 2;
+      if (w < 4) continue;
+      ctx.fillRect(cx - w / 2, by, w, b.h);
     }
+
+    // Thin rim light (top arc only, for that Outrun "neon edge" feel)
+    ctx.strokeStyle = 'rgba(255, 245, 210, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.stroke();
 
     // Mountains
     const mh = palette.mountainHue;
