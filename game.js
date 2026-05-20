@@ -274,6 +274,9 @@
       start(levelIdx) {
         ensure();
         if (!ac) return;
+        // Defensive: if AudioContext was auto-suspended during an ad / pause,
+        // resume it before scheduling notes (otherwise fades and oscillators stall).
+        if (ac.state === 'suspended') { try { ac.resume(); } catch (_) {} }
         currentIdx = levelIdx % SONGS.length;
         song = SONGS[currentIdx];
         bpm = song.bpm;
@@ -297,6 +300,7 @@
       },
       resumePlay() {
         if (!song || !ac) return;
+        if (ac.state === 'suspended') { try { ac.resume(); } catch (_) {} }
         nextTime = ac.currentTime + 0.05;
         active = true;
         fadeMasterTo(targetVol(), 0.25);
@@ -1228,6 +1232,7 @@
       if (secs <= 0) {
         clearInterval(tick);
         adOverlay.classList.remove('show');
+        audio.resume();
         doRevive();
       }
     }, 1000);
