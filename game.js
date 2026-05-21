@@ -1298,6 +1298,9 @@
     if (dy > 32) {
       startSlide();
       gestureConsumed = true;
+    } else if (dy < -32) {
+      jump();
+      gestureConsumed = true;
     }
   }
   function onPointerUp() {
