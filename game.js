@@ -2029,22 +2029,26 @@
       const jitter = (Math.random() - 0.5) * 4;
       ctx.fillStyle = 'rgba(25, 240, 255, 0.35)';
       ctx.beginPath();
-      ctx.arc(cx - 3 + jitter, cy, baseR * 0.95, 0, Math.PI * 2);
+      ctx.ellipse(cx - 3 + jitter, cy, baseR * 0.95 * sqX, baseR * 0.95 * sqY, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = 'rgba(255, 61, 240, 0.35)';
       ctx.beginPath();
-      ctx.arc(cx + 3 - jitter, cy, baseR * 0.95, 0, Math.PI * 2);
+      ctx.ellipse(cx + 3 - jitter, cy, baseR * 0.95 * sqX, baseR * 0.95 * sqY, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Outer glow halo (skin-tinted)
+    // Outer glow halo (skin-tinted) — squashes with the orb while sliding
     const glowR = baseR * 2.2 * pulse;
-    const halo = ctx.createRadialGradient(cx, cy, baseR * 0.6, cx, cy, glowR);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(sqX, sqY);
+    const halo = ctx.createRadialGradient(0, 0, baseR * 0.6, 0, 0, glowR);
     halo.addColorStop(0, sk.halo[0]);
     halo.addColorStop(0.55, sk.halo[1]);
     halo.addColorStop(1, sk.halo[1].replace(/0\.\d+\)$/, '0)'));
     ctx.fillStyle = halo;
-    ctx.fillRect(cx - glowR, cy - glowR, glowR * 2, glowR * 2);
+    ctx.fillRect(-glowR, -glowR, glowR * 2, glowR * 2);
+    ctx.restore();
 
     // Orbital ring — counter-rotates while in air for "spin" feel
     if (!player.onGround) {
@@ -2086,23 +2090,27 @@
       ctx.stroke();
     }
 
-    // Shield aura
+    // Shield aura — squashes with the orb while sliding
     if (shieldActive || frame - shieldFlashFrame < 30) {
       const flash = frame - shieldFlashFrame < 30 ? 1 - (frame - shieldFlashFrame) / 30 : 1;
       const sr = baseR * 1.9 + Math.sin(frame * 0.18) * 3;
-      const sg = ctx.createRadialGradient(cx, cy, baseR, cx, cy, sr);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(sqX, sqY);
+      const sg = ctx.createRadialGradient(0, 0, baseR, 0, 0, sr);
       sg.addColorStop(0, 'rgba(120, 230, 255, 0)');
       sg.addColorStop(0.7, 'rgba(120, 230, 255, ' + (0.25 * flash) + ')');
       sg.addColorStop(1, 'rgba(120, 230, 255, ' + (0.55 * flash) + ')');
       ctx.fillStyle = sg;
-      ctx.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
+      ctx.fillRect(-sr, -sr, sr * 2, sr * 2);
+      ctx.restore();
     }
 
     // Invincibility blink
     if (frame < invincibleUntil && Math.floor(frame / 4) % 2 === 0) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
       ctx.beginPath();
-      ctx.arc(cx, cy, baseR * 1.1, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, baseR * 1.1 * sqX, baseR * 1.1 * sqY, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
