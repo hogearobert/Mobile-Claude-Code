@@ -448,7 +448,7 @@
 
   let scrollX = 0;
   let speed = 6;
-  const baseSpeed = 6;
+  const baseSpeed = 4.6;
   let gravity = 0.95;
   const jumpV = -17;
 
@@ -1579,7 +1579,9 @@
     frame++;
     const slowmoT = slowmoFrames > 0 ? 0.35 : 1.0;
     if (slowmoFrames > 0) slowmoFrames--;
-    speed = (baseSpeed + Math.min(score / 50, 8)) * slowmoT;
+    // Gentle ramp: ~4.6 at start, reaches the 14 cap only around score ~2800
+    // (level 6). Early levels stay relaxed, later ones scale up smoothly.
+    speed = (baseSpeed + Math.min(score / 300, 9.4)) * slowmoT;
     scrollX += speed;
     updateWeather();
 
