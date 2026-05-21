@@ -565,6 +565,58 @@
     streakInfo = { day: streak, reward };
   })();
 
+  // ---------- Set-pieces (special sections — Coin Rush / Gauntlet) ----------
+  let setpiece = null;
+  let setpieceCount = 0;
+  let nextSetpieceAt = 1800;
+  function startSetpiece() {
+    const type = setpieceCount % 2 === 0 ? 'coinrush' : 'gauntlet';
+    setpieceCount++;
+    nextSetpieceAt += 2000;
+    setpiece = { type, t: 0, dur: type === 'coinrush' ? 440 : 560, spawnTimer: 30 };
+    obstacles = obstacles.filter((o) => o.x < W * 0.55);
+    powerups = powerups.filter((p) => p.x < W * 0.55);
+    popText(type === 'coinrush' ? '★ COIN RUSH ★' : '⚡ GAUNTLET ⚡',
+      W / 2, GROUND - 210, type === 'coinrush' ? '#ffe14a' : '#ff3d6e', 1.7);
+    shake = Math.max(shake, 9);
+    flashFrame = frame;
+    audio.levelup();
+  }
+  function updateSetpiece() {
+    setpiece.t++;
+    setpiece.spawnTimer--;
+    if (setpiece.type === 'coinrush') {
+      if (setpiece.spawnTimer <= 0) {
+        const baseY = GROUND - 70 - Math.random() * 130;
+        for (let i = 0; i < 3; i++) {
+          coinsArr.push({ x: W + 30 + i * 30, y: baseY + Math.sin(i * 1.3) * 22, r: 14, picked: false, t: Math.random() * 6.28 });
+        }
+        setpiece.spawnTimer = 20;
+      }
+    } else {
+      if (setpiece.spawnTimer <= 0) {
+        if (Math.random() < 0.5) {
+          obstacles.push({ type: 'overhang', x: W + 20, y: GROUND - 80, w: 46, h: 50 });
+        } else {
+          obstacles.push({ type: 'spike', x: W + 20, y: GROUND - 34, w: 36, h: 34 });
+        }
+        setpiece.spawnTimer = 50 + Math.floor(Math.random() * 18);
+      }
+    }
+    if (setpiece.t >= setpiece.dur) {
+      if (setpiece.type === 'gauntlet') {
+        runCoins += 80;
+        popText('+80 ★  SURVIVED!', W / 2, GROUND - 200, '#19f0ff', 1.5);
+        audio.power();
+      }
+      setpiece = null;
+      nextObstacleAt = frame + 75;
+      nextCoinAt = frame + 90;
+      nextPowerupAt = Math.max(nextPowerupAt, frame + 400);
+      nextMysteryAt = Math.max(nextMysteryAt, frame + 600);
+    }
+  }
+
   // ---------- Mystery box (rare variable reward — dopamine hit) ----------
   let mysteryBoxes = [];
   let nextMysteryAt = 1800; // around 30s in
@@ -1046,6 +1098,9 @@
     nextPowerupAt = 600;
     nextMysteryAt = 1800;
     mysteryBoxes = [];
+    setpiece = null;
+    setpieceCount = 0;
+    nextSetpieceAt = 1800;
     shake = 0;
     lastJumpFrame = -100;
     inputGraceUntil = 15;
@@ -1553,24 +1608,31 @@
     player.trail.forEach((t) => t.life--);
     player.trail = player.trail.filter((t) => t.life > 0);
 
-    // Spawn (with dynamic difficulty ease)
-    const ease = difficultyEase();
-    if (frame >= nextObstacleAt) {
-      spawnObstacle();
-      const gap = Math.max(45, (95 - score / 8 - levelIdx * 3) * ease);
-      nextObstacleAt = frame + gap + rnd() * 30;
-    }
-    if (frame >= nextCoinAt) {
-      spawnCoin();
-      nextCoinAt = frame + 90 + rnd() * 80;
-    }
-    if (frame >= nextPowerupAt) {
-      spawnPowerup();
-      nextPowerupAt = frame + 900 + rnd() * 600;
-    }
-    if (frame >= nextMysteryAt) {
-      spawnMystery();
-      nextMysteryAt = frame + 2400 + rnd() * 1800;
+    // Set-piece trigger (special section every ~2000 score)
+    if (!setpiece && score >= nextSetpieceAt) startSetpiece();
+
+    if (setpiece) {
+      updateSetpiece();
+    } else {
+      // Normal spawning (with dynamic difficulty ease)
+      const ease = difficultyEase();
+      if (frame >= nextObstacleAt) {
+        spawnObstacle();
+        const gap = Math.max(45, (95 - score / 8 - levelIdx * 3) * ease);
+        nextObstacleAt = frame + gap + rnd() * 30;
+      }
+      if (frame >= nextCoinAt) {
+        spawnCoin();
+        nextCoinAt = frame + 90 + rnd() * 80;
+      }
+      if (frame >= nextPowerupAt) {
+        spawnPowerup();
+        nextPowerupAt = frame + 900 + rnd() * 600;
+      }
+      if (frame >= nextMysteryAt) {
+        spawnMystery();
+        nextMysteryAt = frame + 2400 + rnd() * 1800;
+      }
     }
 
     // Move obstacles
@@ -2230,6 +2292,15 @@
     drawObstacles();
     drawPlayer();
     drawTexts();
+    // Set-piece colour wash + progress bar
+    if (setpiece) {
+      const rush = setpiece.type === 'coinrush';
+      ctx.fillStyle = rush ? 'rgba(255, 200, 40, 0.07)' : 'rgba(255, 40, 60, 0.09)';
+      ctx.fillRect(0, 0, W, H);
+      const prog = 1 - setpiece.t / setpiece.dur;
+      ctx.fillStyle = rush ? 'rgba(255,225,74,0.85)' : 'rgba(255,61,110,0.85)';
+      ctx.fillRect(0, GROUND + 2, W * prog, 4);
+    }
     ctx.restore();
 
     // Full-screen white flash (level up / shield save / revive)
