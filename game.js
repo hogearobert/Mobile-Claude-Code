@@ -420,7 +420,9 @@
     jumps: 0,
     maxJumps: 2,
     rot: 0,
-    trail: []
+    trail: [],
+    sliding: false,
+    slideT: 0
   };
 
   let obstacles = [];
@@ -462,12 +464,12 @@
 
   // ---------- Levels (palette + difficulty) ----------
   const LEVELS = [
-    { name: 'ORIGIN',  sky: ['#0a0e2a', '#1a0a2e', '#2a0a3a'], sun: '#ff3df0', sunRGB: '255,80,200',  mountainHue: 280, accent: '25,240,255',  ground: '#06081a' },
-    { name: 'INFERNO', sky: ['#1a0612', '#3d0a1f', '#5a0f2a'], sun: '#ff7a3d', sunRGB: '255,150,80',  mountainHue: 20,  accent: '255,180,80',  ground: '#1a0612' },
-    { name: 'VERDANT', sky: ['#06140a', '#0a3d1f', '#0a5a2a'], sun: '#3dff7a', sunRGB: '100,255,160', mountainHue: 130, accent: '120,255,180', ground: '#06140a' },
-    { name: 'GLACIAL', sky: ['#06141f', '#0a2a3d', '#0a3d52'], sun: '#3df0ff', sunRGB: '100,230,255', mountainHue: 200, accent: '120,200,255', ground: '#06141f' },
-    { name: 'CRIMSON', sky: ['#1a0608', '#3d0a14', '#5a0a14'], sun: '#ff0a3d', sunRGB: '255,60,90',   mountainHue: 350, accent: '255,80,80',   ground: '#1a0608' },
-    { name: 'SOLAR',   sky: ['#1a1408', '#3d2e0f', '#5a4a0a'], sun: '#ffe14a', sunRGB: '255,225,100', mountainHue: 45,  accent: '255,225,100', ground: '#1a1408' }
+    { name: 'ORIGIN',  sky: ['#0a0e2a', '#1a0a2e', '#2a0a3a'], sun: '#ff3df0', sunRGB: '255,80,200',  mountainHue: 280, accent: '25,240,255',  ground: '#06081a', weather: 'none' },
+    { name: 'INFERNO', sky: ['#1a0612', '#3d0a1f', '#5a0f2a'], sun: '#ff7a3d', sunRGB: '255,150,80',  mountainHue: 20,  accent: '255,180,80',  ground: '#1a0612', weather: 'embers' },
+    { name: 'VERDANT', sky: ['#06140a', '#0a3d1f', '#0a5a2a'], sun: '#3dff7a', sunRGB: '100,255,160', mountainHue: 130, accent: '120,255,180', ground: '#06140a', weather: 'leaves' },
+    { name: 'GLACIAL', sky: ['#06141f', '#0a2a3d', '#0a3d52'], sun: '#3df0ff', sunRGB: '100,230,255', mountainHue: 200, accent: '120,200,255', ground: '#06141f', weather: 'snow' },
+    { name: 'CRIMSON', sky: ['#1a0608', '#3d0a14', '#5a0a14'], sun: '#ff0a3d', sunRGB: '255,60,90',   mountainHue: 350, accent: '255,80,80',   ground: '#1a0608', weather: 'rain' },
+    { name: 'SOLAR',   sky: ['#1a1408', '#3d2e0f', '#5a4a0a'], sun: '#ffe14a', sunRGB: '255,225,100', mountainHue: 45,  accent: '255,225,100', ground: '#1a1408', weather: 'dust' }
   ];
   const LEVEL_SCORE = 500;
   let levelIdx = 0;
@@ -920,6 +922,107 @@
   }
   initParallax();
 
+  // ---------- Dynamic weather (per level) ----------
+  let weatherP = [];
+  let lightningFrame = -1000;
+  function initWeather() {
+    weatherP = [];
+    const w = palette.weather;
+    if (!w || w === 'none') return;
+    const count = w === 'rain' ? 70 : w === 'snow' ? 55 : w === 'embers' ? 40 : w === 'leaves' ? 26 : 34;
+    for (let i = 0; i < count; i++) {
+      weatherP.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        ph: Math.random() * Math.PI * 2,
+        sz: Math.random()
+      });
+    }
+  }
+  function updateWeather() {
+    const w = palette.weather;
+    if (!w || w === 'none') return;
+    for (const p of weatherP) {
+      p.ph += 0.05;
+      if (w === 'rain') {
+        p.x -= 4 + speed * 0.3; p.y += 16;
+        if (p.y > H) { p.y = -10; p.x = Math.random() * (W + 100); }
+        if (p.x < -20) p.x += W + 40;
+      } else if (w === 'snow') {
+        p.x -= 0.6 + Math.sin(p.ph) * 0.8; p.y += 1.4 + p.sz;
+        if (p.y > H) { p.y = -8; p.x = Math.random() * W; }
+        if (p.x < -8) p.x = W + 8;
+      } else if (w === 'embers') {
+        p.x -= 0.4 + Math.sin(p.ph) * 0.6; p.y -= 1.3 + p.sz * 1.2;
+        if (p.y < -10) { p.y = H + 8; p.x = Math.random() * W; }
+        if (p.x < -8) p.x = W + 8;
+      } else if (w === 'leaves') {
+        p.x -= 1 + Math.sin(p.ph) * 1.4; p.y += 0.9 + Math.cos(p.ph * 0.7) * 0.5;
+        if (p.y > H) { p.y = -10; p.x = Math.random() * W; }
+        if (p.x < -12) p.x = W + 12;
+      } else if (w === 'dust') {
+        p.x -= 0.5 + speed * 0.15; p.y += Math.sin(p.ph) * 0.3;
+        if (p.x < -8) { p.x = W + 8; p.y = Math.random() * H; }
+      }
+    }
+    // Lightning on rain levels
+    if (w === 'rain' && Math.random() < 0.004) lightningFrame = frame;
+  }
+  function drawWeather() {
+    const w = palette.weather;
+    if (!w || w === 'none' || !weatherP.length) return;
+    if (w === 'rain') {
+      ctx.strokeStyle = 'rgba(150, 200, 255, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (const p of weatherP) {
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - 4, p.y + 14);
+      }
+      ctx.stroke();
+    } else if (w === 'snow') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      for (const p of weatherP) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.4 + p.sz * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (w === 'embers') {
+      for (const p of weatherP) {
+        const a = 0.4 + Math.sin(p.ph) * 0.3;
+        ctx.fillStyle = 'rgba(255, ' + Math.floor(120 + p.sz * 80) + ', 40, ' + a + ')';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.2 + p.sz * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (w === 'leaves') {
+      for (const p of weatherP) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.ph);
+        ctx.fillStyle = 'rgba(' + Math.floor(120 + p.sz * 80) + ', 220, 120, 0.7)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4 + p.sz * 3, 2 + p.sz * 1.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    } else if (w === 'dust') {
+      ctx.fillStyle = 'rgba(255, 225, 150, 0.25)';
+      for (const p of weatherP) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1 + p.sz * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Lightning flash
+    const la = frame - lightningFrame;
+    if (la >= 0 && la < 8) {
+      ctx.fillStyle = 'rgba(200, 220, 255, ' + (0.4 * (1 - la / 8)) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+  initWeather();
+
   function reset() {
     player.x = 110;
     player.y = GROUND - player.h;
@@ -927,6 +1030,8 @@
     player.onGround = true;
     player.jumps = 0;
     player.rot = 0;
+    player.sliding = false;
+    player.slideT = 0;
     player.trail = [];
     obstacles = [];
     coinsArr = [];
@@ -966,6 +1071,7 @@
     if (comboEl) comboEl.textContent = '';
     if (titleSubEl) titleSubEl.textContent = dailyMode ? 'DAILY · ' + todayStr() : '';
     initParallax();
+    initWeather();
   }
 
   function jump() {
@@ -1112,14 +1218,44 @@
   }
 
   // ---------- Input ----------
-  function onTap(e) {
+  // Tap = jump (fires on release, ~tap-duration latency). Swipe down = slide.
+  let ptrDown = false;
+  let ptrStartY = 0;
+  let gestureConsumed = false;
+  function startSlide() {
+    if (state !== STATE.PLAY) return;
+    player.sliding = true;
+  }
+  function endSlide() {
+    player.sliding = false;
+  }
+  function onPointerDown(e) {
     if (e.cancelable) e.preventDefault();
     audio.resume();
-    if (state === STATE.MENU) return;
-    if (state === STATE.OVER) return;
-    jump();
+    if (state !== STATE.PLAY) return;
+    ptrDown = true;
+    gestureConsumed = false;
+    ptrStartY = e.clientY || 0;
   }
-  canvas.addEventListener('pointerdown', onTap, { passive: false });
+  function onPointerMove(e) {
+    if (!ptrDown || gestureConsumed || state !== STATE.PLAY) return;
+    const dy = (e.clientY || 0) - ptrStartY;
+    if (dy > 32) {
+      startSlide();
+      gestureConsumed = true;
+    }
+  }
+  function onPointerUp() {
+    if (state === STATE.PLAY && ptrDown && !gestureConsumed) {
+      jump();
+    }
+    ptrDown = false;
+    endSlide();
+  }
+  canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+  canvas.addEventListener('pointermove', onPointerMove, { passive: false });
+  window.addEventListener('pointerup', onPointerUp, { passive: false });
+  window.addEventListener('pointercancel', onPointerUp, { passive: false });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'ArrowUp') {
       e.preventDefault();
@@ -1127,7 +1263,13 @@
       if (state === STATE.MENU) startGame();
       else if (state === STATE.OVER) startGame();
       else jump();
+    } else if (e.code === 'ArrowDown') {
+      e.preventDefault();
+      startSlide();
     }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowDown') endSlide();
   });
   // Bottom navigation
   document.querySelectorAll('.nav-btn').forEach((btn) => {
@@ -1261,9 +1403,10 @@
 
   // ---------- Spawning ----------
   function spawnObstacle() {
-    const types = ['spike', 'block', 'tall', 'flying'];
-    let t = types[Math.floor(Math.random() * types.length)];
+    const types = ['spike', 'block', 'tall', 'flying', 'overhang'];
+    let t = types[Math.floor(rnd() * types.length)];
     if (score < 150 && t === 'flying') t = 'spike';
+    if (score < 250 && t === 'overhang') t = 'block'; // teach jump first, then slide
 
     if (t === 'spike') {
       obstacles.push({ type: t, x: W + 20, y: GROUND - 30, w: 36, h: 30 });
@@ -1273,6 +1416,9 @@
       obstacles.push({ type: t, x: W + 20, y: GROUND - 80, w: 32, h: 80 });
     } else if (t === 'flying') {
       obstacles.push({ type: t, x: W + 20, y: GROUND - 140, w: 56, h: 32 });
+    } else if (t === 'overhang') {
+      // Hangs from above — must SLIDE under it (gap of ~30px at floor level)
+      obstacles.push({ type: t, x: W + 20, y: GROUND - 80, w: 46, h: 50 });
     }
   }
 
@@ -1290,7 +1436,12 @@
           const oyT = o.y - pad;
           const oyB = o.y + o.h + pad;
           if (item.y + item.r > oyT && item.y - item.r < oyB) {
-            item.y = Math.max(60, o.y - item.r - 14);
+            if (o.type === 'overhang') {
+              // Drop into the slide gap below the overhang (collect by sliding)
+              item.y = GROUND - item.r - 4;
+            } else {
+              item.y = Math.max(60, o.y - item.r - 14);
+            }
             shifted = true;
           }
         }
@@ -1344,6 +1495,7 @@
       palette = LEVELS[levelIdx];
       skyGradient = null;
       skyGradientH = -1;
+      initWeather();
       shake = Math.max(shake, 8);
       popText('LEVEL ' + (levelIdx + 1) + ' · ' + palette.name, W / 2, GROUND - 180, palette.sun, 1.4);
       if (levelEl) levelEl.textContent = palette.name;
@@ -1371,9 +1523,10 @@
     if (slowmoFrames > 0) slowmoFrames--;
     speed = (baseSpeed + Math.min(score / 50, 8)) * slowmoT;
     scrollX += speed;
+    updateWeather();
 
-    // Player physics
-    player.vy += gravity;
+    // Player physics — sliding in air = fast-fall dive
+    player.vy += gravity * (player.sliding && !player.onGround ? 2.4 : 1);
     player.y += player.vy;
     if (player.y + player.h >= GROUND) {
       player.y = GROUND - player.h;
@@ -1388,6 +1541,9 @@
       player.onGround = false;
       player.rot += 0.15;
     }
+    // Slide squash animation (0 = standing, 1 = fully crouched)
+    const slideTarget = player.sliding && player.onGround ? 1 : 0;
+    player.slideT += (slideTarget - player.slideT) * 0.35;
 
     // Trail
     if (frame % 2 === 0) {
@@ -1513,10 +1669,12 @@
     particles = particles.filter((p) => p.life > 0);
 
     // Collisions (generous to player — feels fair)
+    // While sliding on the ground the hitbox shrinks to a short box near the floor.
+    const slideC = player.slideT > 0.5 && player.onGround;
     const px = player.x + 10;
-    const py = player.y + 8;
     const pw = player.w - 20;
-    const ph = player.h - 12;
+    const py = slideC ? GROUND - 24 : player.y + 8;
+    const ph = slideC ? 22 : player.h - 12;
 
     if (frame > invincibleUntil) {
       for (const o of obstacles) {
@@ -1791,9 +1949,13 @@
     }
 
     const cx = player.x + player.w / 2;
-    const cy = player.y + player.h / 2;
+    const sT = player.slideT;
+    // When sliding, the orb drops to the floor and squashes into a flat ellipse
+    const cy = (player.y + player.h / 2) + ((GROUND - 16) - (player.y + player.h / 2)) * sT;
     const baseR = 22;
-    const pulse = 1 + Math.sin(frame * 0.18) * 0.06;
+    const pulse = (1 + Math.sin(frame * 0.18) * 0.06);
+    const sqX = 1 + sT * 0.55;
+    const sqY = 1 - sT * 0.58;
 
     // GLITCH skin effect: chromatic offset (cyan + pink "ghost" rings flicker around the orb)
     if (sk.animated && Math.floor(frame / 6) % 4 !== 0) {
@@ -1826,7 +1988,7 @@
       ctx.stroke();
     }
 
-    // Core body (skin-tinted)
+    // Core body (skin-tinted) — squashes into an ellipse while sliding
     const core = ctx.createRadialGradient(cx - baseR * 0.3, cy - baseR * 0.3, 0, cx, cy, baseR);
     core.addColorStop(0,   sk.core[0]);
     core.addColorStop(0.3, sk.core[1]);
@@ -1834,13 +1996,13 @@
     core.addColorStop(1,   sk.core[3]);
     ctx.fillStyle = core;
     ctx.beginPath();
-    ctx.arc(cx, cy, baseR * pulse, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, baseR * pulse * sqX, baseR * pulse * sqY, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Inner pulsing dot
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.beginPath();
-    ctx.arc(cx - baseR * 0.25, cy - baseR * 0.25, baseR * 0.25, 0, Math.PI * 2);
+    ctx.arc(cx - baseR * 0.25 * sqX, cy - baseR * 0.25 * sqY, baseR * 0.22, 0, Math.PI * 2);
     ctx.fill();
 
     // Magnet field
@@ -1997,6 +2159,32 @@
         ctx.beginPath();
         ctx.arc(o.x + o.w / 2, o.y + o.h / 2, 6, 0, Math.PI * 2);
         ctx.fill();
+      } else if (o.type === 'overhang') {
+        // Hanging chain up to the top edge so it reads as "slide under"
+        ctx.strokeStyle = 'rgba(255, 61, 110, 0.4)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(o.x + o.w / 2, 0);
+        ctx.lineTo(o.x + o.w / 2, o.y);
+        ctx.stroke();
+        // Body block
+        ctx.fillStyle = '#1a0a14';
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        ctx.strokeStyle = '#ff3d6e';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(o.x + 1.5, o.y + 1.5, o.w - 3, o.h - 3);
+        // Hazard chevrons pointing down (slide!)
+        ctx.fillStyle = '#ff3d6e';
+        for (let i = 0; i < 3; i++) {
+          const chx = o.x + 10 + i * 13;
+          const chy = o.y + o.h - 14;
+          ctx.beginPath();
+          ctx.moveTo(chx, chy);
+          ctx.lineTo(chx + 9, chy);
+          ctx.lineTo(chx + 4.5, chy + 8);
+          ctx.closePath();
+          ctx.fill();
+        }
       }
     }
   }
@@ -2033,6 +2221,7 @@
       ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
     }
     drawBackground();
+    drawWeather();
     drawGround();
     drawCoins();
     drawPowerups();
