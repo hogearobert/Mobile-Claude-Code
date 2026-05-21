@@ -2023,6 +2023,9 @@
     const pulse = (1 + Math.sin(frame * 0.18) * 0.06);
     const sqX = 1 + sT * 0.55;
     const sqY = 1 - sT * 0.58;
+    // Soft squash for diffuse glow — light scatters, so it flattens only gently
+    const gqX = 1 + sT * 0.26;
+    const gqY = 1 - sT * 0.30;
 
     // GLITCH skin effect: chromatic offset (cyan + pink "ghost" rings flicker around the orb)
     if (sk.animated && Math.floor(frame / 6) % 4 !== 0) {
@@ -2037,11 +2040,11 @@
       ctx.fill();
     }
 
-    // Outer glow halo (skin-tinted) — squashes with the orb while sliding
+    // Outer glow halo (skin-tinted) — squashes gently with the orb while sliding
     const glowR = baseR * 2.2 * pulse;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.scale(sqX, sqY);
+    ctx.scale(gqX, gqY);
     const halo = ctx.createRadialGradient(0, 0, baseR * 0.6, 0, 0, glowR);
     halo.addColorStop(0, sk.halo[0]);
     halo.addColorStop(0.55, sk.halo[1]);
@@ -2096,7 +2099,7 @@
       const sr = baseR * 1.9 + Math.sin(frame * 0.18) * 3;
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.scale(sqX, sqY);
+      ctx.scale(gqX, gqY);
       const sg = ctx.createRadialGradient(0, 0, baseR, 0, 0, sr);
       sg.addColorStop(0, 'rgba(120, 230, 255, 0)');
       sg.addColorStop(0.7, 'rgba(120, 230, 255, ' + (0.25 * flash) + ')');
