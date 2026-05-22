@@ -1103,6 +1103,8 @@
     player.sliding = false;
     player.slideT = 0;
     player.trail = [];
+    pendingJump = false;
+    ptrDown = false;
     obstacles = [];
     coinsArr = [];
     particles = [];
@@ -1291,10 +1293,14 @@
   }
 
   // ---------- Input ----------
-  // Tap = jump (fires on release, ~tap-duration latency). Swipe down = slide.
+  // Tap = jump · Swipe down = slide. On the ground the jump is deferred a few
+  // frames so the start of a swipe-down isn't mistaken for a tap (no phantom hop).
   let ptrDown = false;
   let ptrStartY = 0;
   let gestureConsumed = false;
+  let pendingJump = false;
+  let pendingJumpFrame = 0;
+  const JUMP_DEFER = 3; // frames (~50ms) to disambiguate tap vs swipe
   function startSlide() {
     if (state !== STATE.PLAY) return;
     player.sliding = true;
@@ -1306,16 +1312,25 @@
     if (e.cancelable) e.preventDefault();
     audio.resume();
     if (state !== STATE.PLAY) return;
+    // A new touch means any still-pending jump was definitely a tap — commit it.
+    if (pendingJump) { pendingJump = false; jump(); }
     ptrDown = true;
     gestureConsumed = false;
     ptrStartY = e.clientY || 0;
-    jump(); // fires instantly on press — zero release latency
+    if (player.onGround) {
+      // Defer briefly to tell a tap from the start of a swipe-down
+      pendingJump = true;
+      pendingJumpFrame = frame;
+    } else {
+      jump(); // airborne: double-jump fires instantly
+    }
   }
   function onPointerMove(e) {
     if (!ptrDown || gestureConsumed || state !== STATE.PLAY) return;
     const dy = (e.clientY || 0) - ptrStartY;
     if (dy > 30) {
-      // Swipe down → slide. Abort the hop that fired on press, slam back down.
+      // Swipe down → slide. Cancel the pending hop (ground) / abort an air-hop.
+      pendingJump = false;
       if (frame - lastJumpFrame <= 9 && player.vy < 0) player.vy = 7;
       startSlide();
       gestureConsumed = true;
@@ -1638,6 +1653,11 @@
   // ---------- Update ----------
   function update() {
     frame++;
+    // Commit a deferred jump once the tap-vs-swipe window has passed
+    if (pendingJump && frame - pendingJumpFrame >= JUMP_DEFER) {
+      pendingJump = false;
+      jump();
+    }
     const slowmoT = slowmoFrames > 0 ? 0.35 : 1.0;
     if (slowmoFrames > 0) slowmoFrames--;
     // Gentle ramp spread across all 12 levels: ~4.6 at start, reaches the
