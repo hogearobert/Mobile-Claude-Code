@@ -105,7 +105,19 @@
       // 4 — CRIMSON: dark Fm-C#-G#-D#
       { bpm:128, chords:[['F','G#','C'],['C#','F','G#'],['G#','C','D#'],['D#','G','A#']], bass:['F','C#','G#','D#'], bassOct:2, leadOct:5, kick:KICK_B, leadDensity:0.6 },
       // 5 — SOLAR: epic uplifting Cm-G#-D#-A#
-      { bpm:118, chords:[['C','D#','G'],['G#','C','D#'],['D#','G','A#'],['A#','D','F']], bass:['C','G#','D#','A#'], bassOct:2, leadOct:5, kick:KICK_A, leadDensity:0.55 }
+      { bpm:118, chords:[['C','D#','G'],['G#','C','D#'],['D#','G','A#'],['A#','D','F']], bass:['C','G#','D#','A#'], bassOct:2, leadOct:5, kick:KICK_A, leadDensity:0.55 },
+      // 6 — NEBULA: dreamy spacey Am-Em-F-C
+      { bpm:92,  chords:[['A','C','E'],['E','G','B'],['F','A','C'],['C','E','G']], bass:['A','E','F','C'], bassOct:2, leadOct:6, kick:KICK_C, leadDensity:0.3 },
+      // 7 — ACID: bouncy glitchy Em-G-D-C
+      { bpm:122, chords:[['E','G','B'],['G','B','D'],['D','F#','A'],['C','E','G']], bass:['E','G','D','C'], bassOct:2, leadOct:5, kick:KICK_A, leadDensity:0.62 },
+      // 8 — MIDNIGHT: calm mysterious Dm-A-A#-F
+      { bpm:88,  chords:[['D','F','A'],['A','C#','E'],['A#','D','F'],['F','A','C']], bass:['D','A','A#','F'], bassOct:2, leadOct:6, kick:KICK_C, leadDensity:0.28 },
+      // 9 — MAGMA: heavy aggressive Fm-C#-Fm-G#
+      { bpm:140, chords:[['F','G#','C'],['C#','F','G#'],['F','G#','C'],['G#','C','D#']], bass:['F','C#','F','G#'], bassOct:2, leadOct:5, kick:KICK_B, leadDensity:0.72 },
+      // 10 — AURORA: flowing uplifting A-E-F#m-D
+      { bpm:112, chords:[['A','C#','E'],['E','G#','B'],['F#','A','C#'],['D','F#','A']], bass:['A','E','F#','D'], bassOct:2, leadOct:5, kick:KICK_A, leadDensity:0.5 },
+      // 11 — ULTRA: epic climactic Cm-G#-D#-G
+      { bpm:126, chords:[['C','D#','G'],['G#','C','D#'],['D#','G','A#'],['G','A#','D']], bass:['C','G#','D#','G'], bassOct:2, leadOct:5, kick:KICK_B, leadDensity:0.68 }
     ];
 
     let muted = (function(){ try { return localStorage.getItem('glitchrun.v1.muteMusic') === '1'; } catch (_) { return false; } })();
