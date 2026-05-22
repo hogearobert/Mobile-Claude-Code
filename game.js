@@ -443,6 +443,12 @@
   let stars = [];
   let mountains = [];
   let buildings = [];
+  let nebula = [];          // far soft colour clouds (atmospheric depth)
+  let shootingStars = [];   // occasional sky streaks
+  let rings = [];           // expanding shockwave rings on pickups
+  function addRing(x, y, maxR, rgb, life) {
+    rings.push({ x, y, r: 7, maxR: maxR, life: life || 24, maxLife: life || 24, rgb: rgb });
+  }
 
   // Particle pool — avoid GC pressure from hot loops
   const MAX_PARTICLES = 220;
@@ -670,6 +676,7 @@
     else if (reward.extra === 'magnet') magnetFrames = 60 * 6;
     popText(reward.msg + ' +' + reward.coins + '★', player.x + player.w / 2, GROUND - 220, reward.col, 1.4);
     audio.power();
+    addRing(player.x + player.w / 2, GROUND - 220, 130, '255,225,74', 34);
     flashFrame = frame;
     zoomPunch = Math.max(zoomPunch, 0.055);
     shake = Math.max(shake, 10);
@@ -992,6 +999,17 @@
       });
       bx += w + 8;
     }
+    nebula = [];
+    for (let i = 0; i < 4; i++) {
+      nebula.push({
+        x: Math.random() * (W + 200) - 100,
+        y: 40 + Math.random() * (GROUND - 200),
+        r: 130 + Math.random() * 130,
+        tint: i % 2,
+        tw: Math.random() * Math.PI * 2
+      });
+    }
+    shootingStars = [];
   }
   initParallax();
 
@@ -1111,6 +1129,7 @@
     obstacles = [];
     coinsArr = [];
     particles = [];
+    rings = [];
     scrollX = 0;
     speed = baseSpeed;
     score = 0;
@@ -1605,6 +1624,7 @@
       audio.levelup && audio.levelup();
       flashFrame = frame;
       zoomPunch = Math.max(zoomPunch, 0.06);
+      addRing(player.x + player.w / 2, player.y + player.h / 2, 160, palette.accent, 38);
       missionEvent('level', levelIdx);
       music.setLevel(levelIdx);
     }
@@ -1674,12 +1694,27 @@
 
     // Player physics — sliding in air = fast-fall dive
     player.vy += gravity * (player.sliding && !player.onGround ? 2.4 : 1);
+    const fallVy = player.vy;
     player.y += player.vy;
     if (player.y + player.h >= GROUND) {
       player.y = GROUND - player.h;
       player.vy = 0;
       if (!player.onGround) {
         lastJumpFrame = -100;
+        // Landing dust puff — kicks sideways, scaled by fall speed
+        const dust = Math.min(14, 4 + Math.floor(fallVy));
+        const fy = GROUND - 2;
+        for (let i = 0; i < dust; i++) {
+          const dir = i % 2 === 0 ? 1 : -1;
+          pushParticle(
+            player.x + player.w / 2 + dir * 6,
+            fy,
+            dir * (1 + Math.random() * 2.5),
+            -Math.random() * 1.4,
+            18, 'rgba(200,210,235,0.6)', Math.random() * 2 + 1
+          );
+        }
+        addRing(player.x + player.w / 2, GROUND, 40, '255,255,255', 16);
       }
       player.onGround = true;
       player.jumps = 0;
@@ -1794,6 +1829,27 @@
       s.tw += 0.05;
       if (s.x < -5) s.x = W + 5;
     });
+    // Nebula — very slow far drift + breathing
+    nebula.forEach((nb) => {
+      nb.x -= speed * 0.05;
+      nb.tw += 0.012;
+      if (nb.x + nb.r < -40) { nb.x = W + nb.r + Math.random() * 120; nb.y = 40 + Math.random() * (GROUND - 200); }
+    });
+    // Shooting stars — spawn rarely, fly diagonally
+    if (rnd() < 0.012 && shootingStars.length < 2) {
+      shootingStars.push({
+        x: W * (0.3 + rnd() * 0.7),
+        y: rnd() * (GROUND - 240),
+        vx: -(5 + rnd() * 4),
+        vy: 2 + rnd() * 2,
+        life: 26
+      });
+    }
+    shootingStars.forEach((ss) => { ss.x += ss.vx; ss.y += ss.vy; ss.life--; });
+    shootingStars = shootingStars.filter((ss) => ss.life > 0 && ss.x > -60);
+    // Rings — expand + fade
+    rings.forEach((rg) => { rg.r += (rg.maxR - rg.r) * 0.16; rg.life--; });
+    rings = rings.filter((rg) => rg.life > 0);
     mountains.forEach((m) => {
       m.x -= speed * 0.15;
     });
@@ -1837,6 +1893,7 @@
             glitchFrame = frame;
             flashFrame = frame;
             zoomPunch = Math.max(zoomPunch, 0.07);
+            addRing(pcx, pcy, 110, '25,240,255', 30);
             o.x = -999;
             shake = Math.max(shake, 14);
             audio.hit();
@@ -1863,6 +1920,7 @@
         const m = comboMult();
         score += 5 * m;
         audio.coin();
+        addRing(c.x, c.y, 30, '255,225,74', 18);
         if (comboEl) comboEl.textContent = combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '';
         if (combo === 5 || combo === 10 || combo === 20) {
           popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
@@ -1896,9 +1954,11 @@
         if (p.type === 'magnet') {
           magnetFrames = 60 * 8;
           popText('MAGNET 8s', p.x, p.y - 20, '#ffe14a', 1.2);
+          addRing(p.x, p.y, 70, '255,225,74', 28);
         } else if (p.type === 'shield') {
           shieldActive = true;
           popText('SHIELD', p.x, p.y - 20, '#19f0ff', 1.2);
+          addRing(p.x, p.y, 70, '25,240,255', 28);
         }
         audio.power && audio.power();
         missionEvent('powerup');
@@ -1944,12 +2004,48 @@
     ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, W, H);
 
+    // Nebula clouds — far atmospheric depth, additive soft blobs
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const nb of nebula) {
+      const breath = 1 + Math.sin(nb.tw) * 0.12;
+      const r = nb.r * breath;
+      const rgb = nb.tint === 0 ? palette.sunRGB : palette.accent;
+      const ng = ctx.createRadialGradient(nb.x, nb.y, 0, nb.x, nb.y, r);
+      ng.addColorStop(0, 'rgba(' + rgb + ', 0.10)');
+      ng.addColorStop(0.5, 'rgba(' + rgb + ', 0.045)');
+      ng.addColorStop(1, 'rgba(' + rgb + ', 0)');
+      ctx.fillStyle = ng;
+      ctx.fillRect(nb.x - r, nb.y - r, r * 2, r * 2);
+    }
+    ctx.restore();
+
     // Stars
     for (const s of stars) {
       const a = 0.5 + Math.sin(s.tw) * 0.4;
       ctx.fillStyle = `rgba(255,255,255,${a})`;
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Shooting stars — bright head + fading tail
+    for (const ss of shootingStars) {
+      const a = Math.min(1, ss.life / 12);
+      const tx = ss.x - ss.vx * 6;
+      const ty = ss.y - ss.vy * 6;
+      const sg = ctx.createLinearGradient(ss.x, ss.y, tx, ty);
+      sg.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+      sg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = sg;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(ss.x, ss.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,' + a + ')';
+      ctx.beginPath();
+      ctx.arc(ss.x, ss.y, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -2447,6 +2543,21 @@
     ctx.globalAlpha = 1;
   }
 
+  function drawRings() {
+    if (!rings.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const g of rings) {
+      const a = g.life / g.maxLife;
+      ctx.strokeStyle = 'rgba(' + g.rgb + ',' + (a * 0.6) + ')';
+      ctx.lineWidth = 1 + a * 2.5;
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw() {
     ctx.save();
     // Camera zoom-punch (level up / impacts) — eases back each frame
@@ -2468,6 +2579,7 @@
     drawPowerups();
     drawMystery();
     drawParticles();
+    drawRings();
     drawObstacles();
     drawPlayer();
     drawTexts();
