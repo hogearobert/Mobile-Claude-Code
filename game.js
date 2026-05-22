@@ -464,12 +464,18 @@
 
   // ---------- Levels (palette + difficulty) ----------
   const LEVELS = [
-    { name: 'ORIGIN',  sky: ['#0a0e2a', '#1a0a2e', '#2a0a3a'], sun: '#ff3df0', sunRGB: '255,80,200',  mountainHue: 280, accent: '25,240,255',  ground: '#06081a', weather: 'none' },
-    { name: 'INFERNO', sky: ['#1a0612', '#3d0a1f', '#5a0f2a'], sun: '#ff7a3d', sunRGB: '255,150,80',  mountainHue: 20,  accent: '255,180,80',  ground: '#1a0612', weather: 'embers' },
-    { name: 'VERDANT', sky: ['#06140a', '#0a3d1f', '#0a5a2a'], sun: '#3dff7a', sunRGB: '100,255,160', mountainHue: 130, accent: '120,255,180', ground: '#06140a', weather: 'leaves' },
-    { name: 'GLACIAL', sky: ['#06141f', '#0a2a3d', '#0a3d52'], sun: '#3df0ff', sunRGB: '100,230,255', mountainHue: 200, accent: '120,200,255', ground: '#06141f', weather: 'snow' },
-    { name: 'CRIMSON', sky: ['#1a0608', '#3d0a14', '#5a0a14'], sun: '#ff0a3d', sunRGB: '255,60,90',   mountainHue: 350, accent: '255,80,80',   ground: '#1a0608', weather: 'rain' },
-    { name: 'SOLAR',   sky: ['#1a1408', '#3d2e0f', '#5a4a0a'], sun: '#ffe14a', sunRGB: '255,225,100', mountainHue: 45,  accent: '255,225,100', ground: '#1a1408', weather: 'dust' }
+    { name: 'ORIGIN',   sky: ['#0a0e2a', '#1a0a2e', '#2a0a3a'], sun: '#ff3df0', sunRGB: '255,80,200',  mountainHue: 280, accent: '25,240,255',  ground: '#06081a', weather: 'none' },
+    { name: 'INFERNO',  sky: ['#1a0612', '#3d0a1f', '#5a0f2a'], sun: '#ff7a3d', sunRGB: '255,150,80',  mountainHue: 20,  accent: '255,180,80',  ground: '#1a0612', weather: 'embers' },
+    { name: 'VERDANT',  sky: ['#06140a', '#0a3d1f', '#0a5a2a'], sun: '#3dff7a', sunRGB: '100,255,160', mountainHue: 130, accent: '120,255,180', ground: '#06140a', weather: 'leaves' },
+    { name: 'GLACIAL',  sky: ['#06141f', '#0a2a3d', '#0a3d52'], sun: '#3df0ff', sunRGB: '100,230,255', mountainHue: 200, accent: '120,200,255', ground: '#06141f', weather: 'snow' },
+    { name: 'CRIMSON',  sky: ['#1a0608', '#3d0a14', '#5a0a14'], sun: '#ff0a3d', sunRGB: '255,60,90',   mountainHue: 350, accent: '255,80,80',   ground: '#1a0608', weather: 'rain' },
+    { name: 'SOLAR',    sky: ['#1a1408', '#3d2e0f', '#5a4a0a'], sun: '#ffe14a', sunRGB: '255,225,100', mountainHue: 45,  accent: '255,225,100', ground: '#1a1408', weather: 'dust' },
+    { name: 'NEBULA',   sky: ['#0a0420', '#1c0a40', '#2e0a55'], sun: '#b478ff', sunRGB: '180,120,255', mountainHue: 270, accent: '180,130,255', ground: '#0a0420', weather: 'dust' },
+    { name: 'ACID',     sky: ['#0a1505', '#163d0a', '#1f5a0a'], sun: '#c8ff3d', sunRGB: '200,255,80',  mountainHue: 80,  accent: '200,255,90',  ground: '#0a1505', weather: 'rain' },
+    { name: 'MIDNIGHT', sky: ['#020512', '#060f2e', '#0a1640'], sun: '#7da8ff', sunRGB: '125,168,255', mountainHue: 230, accent: '140,170,255', ground: '#020512', weather: 'snow' },
+    { name: 'MAGMA',    sky: ['#160404', '#3d0a06', '#5a1404'], sun: '#ff5a14', sunRGB: '255,100,30',  mountainHue: 12,  accent: '255,120,40',  ground: '#160404', weather: 'embers' },
+    { name: 'AURORA',   sky: ['#04140f', '#0a3d3a', '#0a3d52'], sun: '#3dffd0', sunRGB: '100,255,210', mountainHue: 165, accent: '120,255,220', ground: '#04140f', weather: 'snow' },
+    { name: 'ULTRA',    sky: ['#1a0a1a', '#3d0a3d', '#52145a'], sun: '#ff3df0', sunRGB: '255,80,240',  mountainHue: 300, accent: '255,120,255', ground: '#1a0a1a', weather: 'leaves' }
   ];
   const LEVEL_SCORE = 500;
   let levelIdx = 0;
@@ -1579,9 +1585,9 @@
     frame++;
     const slowmoT = slowmoFrames > 0 ? 0.35 : 1.0;
     if (slowmoFrames > 0) slowmoFrames--;
-    // Gentle ramp: ~4.6 at start, reaches the 14 cap only around score ~2800
-    // (level 6). Early levels stay relaxed, later ones scale up smoothly.
-    speed = (baseSpeed + Math.min(score / 300, 9.4)) * slowmoT;
+    // Gentle ramp spread across all 12 levels: ~4.6 at start, reaches the
+    // 15 cap only around score ~4780 (level 10). Levels 11-12 hold max intensity.
+    speed = (baseSpeed + Math.min(score / 460, 10.4)) * slowmoT;
     scrollX += speed;
     updateWeather();
 
