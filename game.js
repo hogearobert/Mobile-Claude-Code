@@ -517,6 +517,7 @@
   let slowmoFrames = 0;     // frames of remaining slow-mo
   let flashFrame = -1000;   // last frame a white flash was triggered
   let glitchFrame = -1000;  // last frame a chromatic glitch was triggered
+  let zoomPunch = 0;        // camera zoom-punch amount, decays to 0
 
   // ---------- Mode & difficulty (2026 standards: dynamic difficulty + daily) ----------
   let dailyMode = false;
@@ -598,6 +599,7 @@
       W / 2, GROUND - 210, type === 'coinrush' ? '#ffe14a' : '#ff3d6e', 1.7);
     shake = Math.max(shake, 9);
     flashFrame = frame;
+    zoomPunch = Math.max(zoomPunch, 0.05);
     audio.levelup();
   }
   function updateSetpiece() {
@@ -669,6 +671,7 @@
     popText(reward.msg + ' +' + reward.coins + '★', player.x + player.w / 2, GROUND - 220, reward.col, 1.4);
     audio.power();
     flashFrame = frame;
+    zoomPunch = Math.max(zoomPunch, 0.055);
     shake = Math.max(shake, 10);
     for (let i = 0; i < 30; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -1140,6 +1143,7 @@
     slowmoFrames = 0;
     flashFrame = -1000;
     glitchFrame = -1000;
+    zoomPunch = 0;
     scoreEl.textContent = '0';
     coinsEl.textContent = totalCoins;
     if (levelEl) levelEl.textContent = palette.name;
@@ -1194,6 +1198,7 @@
   function gameOver() {
     state = STATE.OVER;
     shake = 18;
+    zoomPunch = 0.09;
     music.stop();
     audio.hit();
     setTimeout(() => audio.over(), 220);
@@ -1599,6 +1604,7 @@
       }
       audio.levelup && audio.levelup();
       flashFrame = frame;
+      zoomPunch = Math.max(zoomPunch, 0.06);
       missionEvent('level', levelIdx);
       music.setLevel(levelIdx);
     }
@@ -1830,6 +1836,7 @@
             slowmoFrames = 30;
             glitchFrame = frame;
             flashFrame = frame;
+            zoomPunch = Math.max(zoomPunch, 0.07);
             o.x = -999;
             shake = Math.max(shake, 14);
             audio.hit();
@@ -2050,9 +2057,56 @@
     }
   }
 
+  // Horizontal speed streaks — intensity scales with run speed
+  function drawSpeedLines() {
+    const intensity = Math.max(0, (speed - 8) / 7); // 0 at speed 8, 1 at 15
+    if (intensity <= 0.02) return;
+    const n = Math.floor(4 + intensity * 8);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < n; i++) {
+      const seed = (i * 137 + Math.floor(scrollX / 18)) % 1000;
+      const y = (seed / 1000) * GROUND;
+      const len = 40 + (seed % 90);
+      const x = W - ((scrollX * (2.2 + (seed % 5) * 0.4) + seed * 9) % (W + 160));
+      const a = intensity * (0.10 + (seed % 4) * 0.04);
+      const g = ctx.createLinearGradient(x, y, x + len, y);
+      g.addColorStop(0, 'rgba(255,255,255,0)');
+      g.addColorStop(0.5, 'rgba(' + palette.accent + ',' + a + ')');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, len, 1.5);
+    }
+    ctx.restore();
+  }
+
   function drawGround() {
     ctx.fillStyle = palette.ground;
     ctx.fillRect(0, GROUND, W, H - GROUND);
+
+    // Atmospheric haze band at the horizon
+    const haze = ctx.createLinearGradient(0, GROUND - 60, 0, GROUND + 30);
+    haze.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0)');
+    haze.addColorStop(0.7, 'rgba(' + palette.sunRGB + ', 0.10)');
+    haze.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0.20)');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, GROUND - 60, W, 90);
+
+    // Sun light reflection shimmering down the floor
+    const sunCx = W * 0.78;
+    const refl = ctx.createLinearGradient(0, GROUND, 0, H);
+    refl.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0.22)');
+    refl.addColorStop(0.5, 'rgba(' + palette.sunRGB + ', 0.07)');
+    refl.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0)');
+    ctx.fillStyle = refl;
+    const reflW = 90 + Math.sin(frame * 0.08) * 10;
+    ctx.beginPath();
+    ctx.moveTo(sunCx - reflW * 0.4, GROUND);
+    ctx.lineTo(sunCx + reflW * 0.4, GROUND);
+    ctx.lineTo(sunCx + reflW, H);
+    ctx.lineTo(sunCx - reflW, H);
+    ctx.closePath();
+    ctx.fill();
 
     ctx.strokeStyle = palette.sun;
     ctx.lineWidth = 2;
@@ -2080,6 +2134,23 @@
 
   function drawPlayer() {
     const sk = currentSkin();
+    // Light pool the orb casts on the ground (sells dynamic lighting)
+    {
+      const lx = player.x + player.w / 2;
+      const air = Math.max(0, GROUND - (player.y + player.h)); // height off floor
+      const spread = 34 + Math.min(air * 0.25, 30);
+      const la = 0.5 * Math.max(0.2, 1 - air / 260);
+      const lg = ctx.createRadialGradient(lx, GROUND, 0, lx, GROUND, spread);
+      lg.addColorStop(0, 'rgba(' + sk.trail + ', ' + (la * 0.7) + ')');
+      lg.addColorStop(1, 'rgba(' + sk.trail + ', 0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = lg;
+      ctx.beginPath();
+      ctx.ellipse(lx, GROUND, spread, spread * 0.32, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     // Trail — soft glow without shadowBlur (skin-tinted)
     for (let i = 0; i < player.trail.length; i++) {
       const t = player.trail[i];
@@ -2378,12 +2449,21 @@
 
   function draw() {
     ctx.save();
+    // Camera zoom-punch (level up / impacts) — eases back each frame
+    zoomPunch *= 0.86;
+    if (zoomPunch > 0.002) {
+      ctx.translate(W / 2, H / 2);
+      const z = 1 + zoomPunch;
+      ctx.scale(z, z);
+      ctx.translate(-W / 2, -H / 2);
+    }
     if (shake > 0.3) {
       ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
     }
     drawBackground();
     drawWeather();
     drawGround();
+    drawSpeedLines();
     drawCoins();
     drawPowerups();
     drawMystery();

@@ -39,6 +39,30 @@ html, body {
   background: linear-gradient(180deg, #0a0e2a 0%, #1a0a2e 60%, #2a0a3a 100%);
 }
 
+/* Post-processing FX — GPU-composited, zero per-frame JS cost */
+#fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+#fx::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* cinematic vignette */
+  background: radial-gradient(ellipse 75% 65% at 50% 46%, transparent 0%, transparent 58%, rgba(0,0,0,0.42) 88%, rgba(0,0,0,0.62) 100%);
+}
+#fx::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* subtle CRT scanlines */
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.10) 0px, rgba(0,0,0,0.10) 1px, transparent 1px, transparent 3px);
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+
 #hud {
   position: absolute;
   top: env(safe-area-inset-top, 0);
@@ -46,6 +70,7 @@ html, body {
   right: 0;
   padding: 12px 16px;
   pointer-events: none;
+  z-index: 4;
 }
 
 .hud-row {
