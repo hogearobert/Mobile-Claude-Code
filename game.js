@@ -2062,22 +2062,26 @@
       ctx.stroke();
     }
 
-    // Core body (skin-tinted) — squashes into an ellipse while sliding
-    const core = ctx.createRadialGradient(cx - baseR * 0.3, cy - baseR * 0.3, 0, cx, cy, baseR);
+    // Core body (skin-tinted) — drawn under a squash transform so the radial
+    // gradient AND the inner highlight stretch together with the shape.
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(sqX, sqY);
+    const core = ctx.createRadialGradient(-baseR * 0.3, -baseR * 0.3, 0, 0, 0, baseR);
     core.addColorStop(0,   sk.core[0]);
     core.addColorStop(0.3, sk.core[1]);
     core.addColorStop(0.7, sk.core[2]);
     core.addColorStop(1,   sk.core[3]);
     ctx.fillStyle = core;
     ctx.beginPath();
-    ctx.ellipse(cx, cy, baseR * pulse * sqX, baseR * pulse * sqY, 0, 0, Math.PI * 2);
+    ctx.arc(0, 0, baseR * pulse, 0, Math.PI * 2);
     ctx.fill();
-
     // Inner pulsing dot
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.beginPath();
-    ctx.arc(cx - baseR * 0.25 * sqX, cy - baseR * 0.25 * sqY, baseR * 0.22, 0, Math.PI * 2);
+    ctx.arc(-baseR * 0.25, -baseR * 0.25, baseR * 0.22, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 
     // Magnet field
     if (magnetFrames > 0) {
