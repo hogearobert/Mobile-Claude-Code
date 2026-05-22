@@ -1121,7 +1121,7 @@
     nextSetpieceAt = 1800;
     shake = 0;
     lastJumpFrame = -100;
-    inputGraceUntil = 15;
+    inputGraceUntil = 4;
     levelIdx = 0;
     palette = LEVELS[0];
     skyGradient = null;
@@ -1309,22 +1309,19 @@
     ptrDown = true;
     gestureConsumed = false;
     ptrStartY = e.clientY || 0;
+    jump(); // fires instantly on press — zero release latency
   }
   function onPointerMove(e) {
     if (!ptrDown || gestureConsumed || state !== STATE.PLAY) return;
     const dy = (e.clientY || 0) - ptrStartY;
-    if (dy > 32) {
+    if (dy > 30) {
+      // Swipe down → slide. Abort the hop that fired on press, slam back down.
+      if (frame - lastJumpFrame <= 9 && player.vy < 0) player.vy = 7;
       startSlide();
-      gestureConsumed = true;
-    } else if (dy < -32) {
-      jump();
       gestureConsumed = true;
     }
   }
   function onPointerUp() {
-    if (state === STATE.PLAY && ptrDown && !gestureConsumed) {
-      jump();
-    }
     ptrDown = false;
     endSlide();
   }
@@ -1411,7 +1408,7 @@
   if (pauseBtn) pauseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; music.pause(); }
-    else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 8; music.resumePlay(); }
+    else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 2; music.resumePlay(); }
   });
 
   // Show daily streak banner on menu if a reward was processed at load
@@ -1592,6 +1589,52 @@
     }
   }
 
+  // ---------- Precise collision helpers (player is a circle) ----------
+  function circleRectHit(cx, cy, cr, rx, ry, rw, rh) {
+    const nx = cx < rx ? rx : (cx > rx + rw ? rx + rw : cx);
+    const ny = cy < ry ? ry : (cy > ry + rh ? ry + rh : cy);
+    const dx = cx - nx, dy = cy - ny;
+    return dx * dx + dy * dy < cr * cr;
+  }
+  function circleEllipseHit(cx, cy, cr, ex, ey, erx, ery) {
+    // Minkowski-sum approximation: inflate the ellipse by the circle radius
+    const dx = (cx - ex) / (erx + cr);
+    const dy = (cy - ey) / (ery + cr);
+    return dx * dx + dy * dy <= 1;
+  }
+  function segDist2(px, py, x1, y1, x2, y2) {
+    const vx = x2 - x1, vy = y2 - y1;
+    const wx = px - x1, wy = py - y1;
+    const len2 = vx * vx + vy * vy || 1;
+    let t = (wx * vx + wy * vy) / len2;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    const ex = x1 + t * vx - px, ey = y1 + t * vy - py;
+    return ex * ex + ey * ey;
+  }
+  function circleTriHit(cx, cy, cr, ax, ay, bx, by, cx2, cy2) {
+    const s = (px, py, qx, qy, rx, ry) => (px - rx) * (qy - ry) - (qx - rx) * (py - ry);
+    const d1 = s(cx, cy, ax, ay, bx, by);
+    const d2 = s(cx, cy, bx, by, cx2, cy2);
+    const d3 = s(cx, cy, cx2, cy2, ax, ay);
+    const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+    const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+    if (!(hasNeg && hasPos)) return true; // centre inside triangle
+    const r2 = cr * cr;
+    return segDist2(cx, cy, ax, ay, bx, by) < r2 ||
+           segDist2(cx, cy, bx, by, cx2, cy2) < r2 ||
+           segDist2(cx, cy, cx2, cy2, ax, ay) < r2;
+  }
+  // Test the player circle against one obstacle, using its true drawn shape.
+  function obstacleHit(o, cx, cy, cr) {
+    if (o.type === 'spike') {
+      return circleTriHit(cx, cy, cr, o.x, o.y + o.h, o.x + o.w / 2, o.y, o.x + o.w, o.y + o.h);
+    }
+    if (o.type === 'flying') {
+      return circleEllipseHit(cx, cy, cr, o.x + o.w / 2, o.y + o.h / 2, o.w / 2, o.h / 2);
+    }
+    return circleRectHit(cx, cy, cr, o.x, o.y, o.w, o.h);
+  }
+
   // ---------- Update ----------
   function update() {
     frame++;
@@ -1662,9 +1705,12 @@
     obstacles.forEach((o) => (o.x -= speed));
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
 
-    // Move coins (with magnet pull if active)
+    // Player collision circle — matches the drawn orb; shrinks & drops while sliding
+    const sTc = player.slideT;
     const pcx = player.x + player.w / 2;
-    const pcy = player.y + player.h / 2;
+    const standCy = player.y + player.h / 2;
+    const pcy = standCy + ((GROUND - 14) - standCy) * sTc;
+    const pcr = 20 - 9 * sTc; // 20 standing, 11 fully slid
     coinsArr.forEach((c) => {
       c.x -= speed;
       c.t += 0.15;
@@ -1753,17 +1799,10 @@
     });
     particles = particles.filter((p) => p.life > 0);
 
-    // Collisions (generous to player — feels fair)
-    // While sliding on the ground the hitbox shrinks to a short box near the floor.
-    const slideC = player.slideT > 0.5 && player.onGround;
-    const px = player.x + 10;
-    const pw = player.w - 20;
-    const py = slideC ? GROUND - 24 : player.y + 8;
-    const ph = slideC ? 22 : player.h - 12;
-
+    // Collisions — player is a circle, each obstacle tested by its true shape
     if (frame > invincibleUntil) {
       for (const o of obstacles) {
-        if (px < o.x + o.w && px + pw > o.x && py < o.y + o.h && py + ph > o.y) {
+        if (obstacleHit(o, pcx, pcy, pcr)) {
           if (shieldActive) {
             shieldActive = false;
             shieldFlashFrame = frame;
@@ -1787,7 +1826,7 @@
     for (const c of coinsArr) {
       const dx = c.x - pcx;
       const dy = c.y - pcy;
-      if (dx * dx + dy * dy < (c.r + 24) * (c.r + 24)) {
+      if (dx * dx + dy * dy < (c.r + pcr + 6) * (c.r + pcr + 6)) {
         c.picked = true;
         runCoins++;
         missionEvent('coin');
@@ -1815,7 +1854,7 @@
       if (m.picked) continue;
       const dx = m.x - pcx;
       const dy = m.y - pcy;
-      if (dx * dx + dy * dy < (m.r + 28) * (m.r + 28)) {
+      if (dx * dx + dy * dy < (m.r + pcr + 4) * (m.r + pcr + 4)) {
         m.picked = true;
         openMystery();
       }
@@ -1825,7 +1864,7 @@
       if (p.picked) continue;
       const dx = p.x - pcx;
       const dy = p.y - pcy;
-      if (dx * dx + dy * dy < (p.r + 26) * (p.r + 26)) {
+      if (dx * dx + dy * dy < (p.r + pcr + 6) * (p.r + pcr + 6)) {
         p.picked = true;
         if (p.type === 'magnet') {
           magnetFrames = 60 * 8;
@@ -1851,11 +1890,11 @@
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
     if (score >= 2000 && !hasAch('score_2000')) unlock('score_2000');
     if (score >= 5000 && !hasAch('score_5000')) unlock('score_5000');
-    if (combo === 10) unlock('combo_10');
-    else if (combo === 20) unlock('combo_20');
-    if (magnetFrames === 60 * 8 - 1) unlock('magnet');
-    if (levelIdx === 3) unlock('level_3');
-    else if (levelIdx === 5) unlock('level_6');
+    if (combo >= 10 && !hasAch('combo_10')) unlock('combo_10');
+    if (combo >= 20 && !hasAch('combo_20')) unlock('combo_20');
+    if (magnetFrames > 0 && !hasAch('magnet')) unlock('magnet');
+    if (levelIdx >= 3 && !hasAch('level_3')) unlock('level_3');
+    if (levelIdx >= 5 && !hasAch('level_6')) unlock('level_6');
     if (totalCoins + runCoins >= 100) unlock('coins_100');
     if (frame % 4 === 0) scoreEl.textContent = score;
 
@@ -2397,7 +2436,7 @@
       if (steps >= 5) accumulator = Math.min(accumulator, FIXED_DT);
       draw();
     } catch (err) {
-      console.error('[Neon Dash] loop error:', err);
+      console.error('[Glitch Run] loop error:', err);
     }
     requestAnimationFrame(loop);
   }
