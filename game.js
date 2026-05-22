@@ -273,7 +273,7 @@
       scheduler = setTimeout(loop, 25);
     }
 
-    function targetVol() { return muted ? 0 : 0.16; }
+    function targetVol() { return muted ? 0 : 0.36; }
 
     function fadeMasterTo(v, secs) {
       if (!ac || !master) return;
