@@ -502,8 +502,9 @@
   // ---------- Combo ----------
   let combo = 0;
   let lastCoinFrame = -1000;
-  const COMBO_WINDOW = 90; // ~1.5s at 60fps
-  function comboMult() { return combo >= 10 ? 3 : combo >= 5 ? 2 : 1; }
+  // Window scales with combo: tight when cold (0.8s), generous when hot (2.5s).
+  function comboWindow() { return Math.round(48 + Math.min(combo, 15) * 7); }
+  function comboMult() { return combo >= 15 ? 4 : combo >= 10 ? 3 : combo >= 5 ? 2 : 1; }
 
   // ---------- Power-ups ----------
   let powerups = [];
@@ -524,6 +525,7 @@
   let flashFrame = -1000;   // last frame a white flash was triggered
   let glitchFrame = -1000;  // last frame a chromatic glitch was triggered
   let zoomPunch = 0;        // camera zoom-punch amount, decays to 0
+  let landBounce = 0;       // landing squash impulse, decays to 0
 
   // ---------- Mode & difficulty (2026 standards: dynamic difficulty + daily) ----------
   let dailyMode = false;
@@ -597,7 +599,7 @@
   function startSetpiece() {
     const type = setpieceCount % 2 === 0 ? 'coinrush' : 'gauntlet';
     setpieceCount++;
-    nextSetpieceAt += 2000;
+    nextSetpieceAt += 1300;
     setpiece = { type, t: 0, dur: type === 'coinrush' ? 440 : 560, spawnTimer: 30 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
@@ -1163,6 +1165,7 @@
     flashFrame = -1000;
     glitchFrame = -1000;
     zoomPunch = 0;
+    landBounce = 0;
     scoreEl.textContent = '0';
     coinsEl.textContent = totalCoins;
     if (levelEl) levelEl.textContent = palette.name;
@@ -1178,17 +1181,22 @@
     if (frame - lastJumpFrame < 3) return;
     if (player.jumps >= player.maxJumps) return;
     lastJumpFrame = frame;
-    player.vy = jumpV * (player.jumps === 0 ? 1 : 0.85);
+    // Slide-bounce: jumping out of a grounded slide launches higher (skill tech)
+    const slideBoost = (player.sliding && player.onGround && player.slideT > 0.4) ? 1.28 : 1;
+    player.vy = jumpV * (player.jumps === 0 ? 1 : 0.85) * slideBoost;
     player.onGround = false;
     player.jumps++;
-    if (player.jumps === 1) audio.jump(); else audio.djump();
+    if (slideBoost > 1) { player.sliding = false; audio.djump(); }
+    else if (player.jumps === 1) audio.jump(); else audio.djump();
     if (player.jumps === 1) unlock('first_jump');
-    const jumpColor = player.jumps === 1 ? '#19f0ff' : '#ff3df0';
-    for (let i = 0; i < 10; i++) {
+    const jumpColor = slideBoost > 1 ? '#ffe14a' : (player.jumps === 1 ? '#19f0ff' : '#ff3df0');
+    const burst = slideBoost > 1 ? 18 : 10;
+    if (slideBoost > 1) popText('BOOST!', player.x + player.w / 2, player.y, '#ffe14a', 1.1);
+    for (let i = 0; i < burst; i++) {
       pushParticle(
         player.x + player.w / 2,
         player.y + player.h,
-        (Math.random() - 0.5) * 4,
+        (Math.random() - 0.5) * (slideBoost > 1 ? 6 : 4),
         Math.random() * 3 + 1,
         24, jumpColor, Math.random() * 3 + 1
       );
@@ -1691,6 +1699,7 @@
     speed = (baseSpeed + Math.min(score / 460, 10.4)) * slowmoT;
     scrollX += speed;
     updateWeather();
+    if (landBounce > 0.01) landBounce *= 0.8; else landBounce = 0;
 
     // Player physics — sliding in air = fast-fall dive
     player.vy += gravity * (player.sliding && !player.onGround ? 2.4 : 1);
@@ -1715,6 +1724,7 @@
           );
         }
         addRing(player.x + player.w / 2, GROUND, 40, '255,255,255', 16);
+        landBounce = Math.min(1, 0.35 + fallVy * 0.04); // squash impulse scales with impact
       }
       player.onGround = true;
       player.jumps = 0;
@@ -1815,7 +1825,7 @@
     // Decay magnet
     if (magnetFrames > 0) magnetFrames--;
     // Combo decay
-    if (combo > 0 && frame - lastCoinFrame > COMBO_WINDOW) {
+    if (combo > 0 && frame - lastCoinFrame > comboWindow()) {
       combo = 0;
       if (comboEl) comboEl.textContent = '';
     }
@@ -1914,7 +1924,7 @@
         c.picked = true;
         runCoins++;
         missionEvent('coin');
-        if (frame - lastCoinFrame < COMBO_WINDOW) combo++;
+        if (frame - lastCoinFrame < comboWindow()) combo++;
         else combo = 1;
         lastCoinFrame = frame;
         const m = comboMult();
@@ -1922,9 +1932,10 @@
         audio.coin();
         addRing(c.x, c.y, 30, '255,225,74', 18);
         if (comboEl) comboEl.textContent = combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '';
-        if (combo === 5 || combo === 10 || combo === 20) {
+        if (combo === 5 || combo === 10 || combo === 15 || combo === 20 || combo === 30) {
           popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
           shake = Math.max(shake, 4);
+          addRing(c.x, c.y, 50, '255,225,74', 22);
           missionEvent('combo', combo);
         }
         for (let i = 0; i < 8; i++) {
@@ -2265,8 +2276,9 @@
     const cy = (player.y + player.h / 2) + ((GROUND - 16) - (player.y + player.h / 2)) * sT;
     const baseR = 22;
     const pulse = (1 + Math.sin(frame * 0.18) * 0.06);
-    const sqX = 1 + sT * 0.55;
-    const sqY = 1 - sT * 0.58;
+    // Combine slide squash with a transient landing squash-bounce
+    const sqX = (1 + sT * 0.55) * (1 + landBounce * 0.45);
+    const sqY = (1 - sT * 0.58) * (1 - landBounce * 0.5);
     // Glow matches the core's squash exactly, but fades as it flattens so a
     // flat orb gets a soft subtle glow instead of a harsh bright streak.
     const glowAlpha = 1 - sT * 0.5;
@@ -2309,23 +2321,46 @@
 
     // Core body (skin-tinted) — drawn under a squash transform so the radial
     // gradient AND the inner highlight stretch together with the shape.
+    // Gradient is cached per skin (constant local coords) to avoid per-frame alloc.
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(sqX, sqY);
-    const core = ctx.createRadialGradient(-baseR * 0.3, -baseR * 0.3, 0, 0, 0, baseR);
-    core.addColorStop(0,   sk.core[0]);
-    core.addColorStop(0.3, sk.core[1]);
-    core.addColorStop(0.7, sk.core[2]);
-    core.addColorStop(1,   sk.core[3]);
-    ctx.fillStyle = core;
+    if (sk._coreGrad == null) {
+      const cg = ctx.createRadialGradient(-baseR * 0.3, -baseR * 0.3, 0, 0, 0, baseR);
+      cg.addColorStop(0,   sk.core[0]);
+      cg.addColorStop(0.3, sk.core[1]);
+      cg.addColorStop(0.7, sk.core[2]);
+      cg.addColorStop(1,   sk.core[3]);
+      sk._coreGrad = cg;
+    }
+    ctx.fillStyle = sk._coreGrad;
     ctx.beginPath();
     ctx.arc(0, 0, baseR * pulse, 0, Math.PI * 2);
     ctx.fill();
-    // Inner pulsing dot
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    // Specular highlight (upper-left)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.beginPath();
-    ctx.arc(-baseR * 0.25, -baseR * 0.25, baseR * 0.22, 0, Math.PI * 2);
+    ctx.arc(-baseR * 0.34, -baseR * 0.38, baseR * 0.18, 0, Math.PI * 2);
     ctx.fill();
+    // Forward-facing eyes — look toward motion (up when rising, down when falling)
+    const look = player.onGround ? 0 : Math.max(-1, Math.min(1, player.vy / 12));
+    const eyeY = -baseR * 0.08 + look * baseR * 0.22;
+    const eyeDX = baseR * 0.30, eyeR = baseR * 0.165;
+    const blink = (frame % 200) < 6 ? 0.15 : 1; // occasional blink
+    ctx.fillStyle = '#0a0e1e';
+    for (const ex of [-eyeDX, eyeDX]) {
+      ctx.beginPath();
+      ctx.ellipse(ex, eyeY, eyeR, eyeR * blink, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (blink > 0.5) {
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      for (const ex of [-eyeDX, eyeDX]) {
+        ctx.beginPath();
+        ctx.arc(ex + eyeR * 0.3, eyeY - eyeR * 0.3, eyeR * 0.34, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.restore();
 
     // Magnet field
@@ -2443,69 +2478,98 @@
   function drawObstacles() {
     for (const o of obstacles) {
       if (o.type === 'spike') {
-        ctx.fillStyle = '#ff3d6e';
+        // JUMP hazard — magenta, with vertical shading for depth
+        const g = ctx.createLinearGradient(o.x, o.y, o.x, o.y + o.h);
+        g.addColorStop(0, '#ff6a9e');
+        g.addColorStop(1, '#c01049');
+        ctx.fillStyle = g;
         ctx.beginPath();
         ctx.moveTo(o.x, o.y + o.h);
         ctx.lineTo(o.x + o.w / 2, o.y);
         ctx.lineTo(o.x + o.w, o.y + o.h);
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = '#ffadc4';
+        // bright edge facing the light (left)
+        ctx.strokeStyle = 'rgba(255,200,220,0.9)';
         ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y + o.h);
+        ctx.lineTo(o.x + o.w / 2, o.y);
         ctx.stroke();
-      } else if (o.type === 'block') {
-        ctx.fillStyle = '#1a0a14';
+      } else if (o.type === 'block' || o.type === 'tall') {
+        // JUMP hazard — magenta neon crate with face shading
+        const g = ctx.createLinearGradient(o.x, o.y, o.x + o.w, o.y + o.h);
+        g.addColorStop(0, '#2a0a18');
+        g.addColorStop(1, '#12060c');
+        ctx.fillStyle = g;
         ctx.fillRect(o.x, o.y, o.w, o.h);
         ctx.strokeStyle = '#ff3d6e';
         ctx.lineWidth = 3;
         ctx.strokeRect(o.x + 1.5, o.y + 1.5, o.w - 3, o.h - 3);
+        // top highlight bar
+        ctx.fillStyle = 'rgba(255,120,160,0.55)';
+        ctx.fillRect(o.x + 3, o.y + 3, o.w - 6, 3);
+        ctx.strokeStyle = 'rgba(255,61,110,0.85)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(o.x + 8, o.y + 8);
-        ctx.lineTo(o.x + o.w - 8, o.y + o.h - 8);
-        ctx.moveTo(o.x + o.w - 8, o.y + 8);
-        ctx.lineTo(o.x + 8, o.y + o.h - 8);
-        ctx.stroke();
-      } else if (o.type === 'tall') {
-        ctx.fillStyle = '#1a0a14';
-        ctx.fillRect(o.x, o.y, o.w, o.h);
-        ctx.strokeStyle = '#ff3d6e';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(o.x + 1.5, o.y + 1.5, o.w - 3, o.h - 3);
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-          ctx.moveTo(o.x, o.y + 12 + i * 16);
-          ctx.lineTo(o.x + o.w, o.y + 12 + i * 16);
+        if (o.type === 'block') {
+          ctx.moveTo(o.x + 9, o.y + 9);
+          ctx.lineTo(o.x + o.w - 9, o.y + o.h - 9);
+          ctx.moveTo(o.x + o.w - 9, o.y + 9);
+          ctx.lineTo(o.x + 9, o.y + o.h - 9);
+        } else {
+          for (let i = 0; i < 5; i++) {
+            ctx.moveTo(o.x + 4, o.y + 14 + i * 16);
+            ctx.lineTo(o.x + o.w - 4, o.y + 14 + i * 16);
+          }
         }
         ctx.stroke();
       } else if (o.type === 'flying') {
+        // AIR hazard — cyan drone, eye that tracks the player
+        const cx2 = o.x + o.w / 2, cy2 = o.y + o.h / 2;
         const pulse = 1 + Math.sin(frame * 0.2) * 0.1;
-        ctx.fillStyle = '#ff3df0';
+        const rg = ctx.createRadialGradient(cx2, cy2, 2, cx2, cy2, o.w / 2 + 8);
+        rg.addColorStop(0, 'rgba(120,245,255,0.5)');
+        rg.addColorStop(1, 'rgba(25,240,255,0)');
+        ctx.fillStyle = rg;
+        ctx.fillRect(cx2 - o.w, cy2 - o.h, o.w * 2, o.h * 2);
+        ctx.fillStyle = '#19f0ff';
         ctx.beginPath();
-        ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, (o.w / 2) * pulse, (o.h / 2) * pulse, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx2, cy2, (o.w / 2) * pulse, (o.h / 2) * pulse, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // pupil tracks player
+        const ang = Math.atan2((player.y + player.h / 2) - cy2, (player.x + player.w / 2) - cx2);
+        ctx.fillStyle = '#06121a';
+        ctx.beginPath();
+        ctx.arc(cx2 + Math.cos(ang) * 6, cy2 + Math.sin(ang) * 4, 7, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(o.x + o.w / 2, o.y + o.h / 2, 6, 0, Math.PI * 2);
+        ctx.arc(cx2 + Math.cos(ang) * 6 - 2, cy2 + Math.sin(ang) * 4 - 2, 2.5, 0, Math.PI * 2);
         ctx.fill();
       } else if (o.type === 'overhang') {
-        // Hanging chain up to the top edge so it reads as "slide under"
-        ctx.strokeStyle = 'rgba(255, 61, 110, 0.4)';
+        // SLIDE hazard — amber, distinct colour cues "go low"
+        ctx.strokeStyle = 'rgba(255, 177, 61, 0.35)';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(o.x + o.w / 2, 0);
         ctx.lineTo(o.x + o.w / 2, o.y);
         ctx.stroke();
-        // Body block
-        ctx.fillStyle = '#1a0a14';
+        const g = ctx.createLinearGradient(o.x, o.y, o.x, o.y + o.h);
+        g.addColorStop(0, '#2a1a06');
+        g.addColorStop(1, '#1a1004');
+        ctx.fillStyle = g;
         ctx.fillRect(o.x, o.y, o.w, o.h);
-        ctx.strokeStyle = '#ff3d6e';
+        ctx.strokeStyle = '#ffb13d';
         ctx.lineWidth = 3;
         ctx.strokeRect(o.x + 1.5, o.y + 1.5, o.w - 3, o.h - 3);
-        // Hazard chevrons pointing down (slide!)
-        ctx.fillStyle = '#ff3d6e';
+        // bottom highlight (the dangerous edge)
+        ctx.fillStyle = 'rgba(255,200,120,0.7)';
+        ctx.fillRect(o.x + 3, o.y + o.h - 5, o.w - 6, 3);
+        ctx.fillStyle = '#ffb13d';
         for (let i = 0; i < 3; i++) {
           const chx = o.x + 10 + i * 13;
-          const chy = o.y + o.h - 14;
+          const chy = o.y + o.h - 16;
           ctx.beginPath();
           ctx.moveTo(chx, chy);
           ctx.lineTo(chx + 9, chy);
@@ -2518,17 +2582,55 @@
   }
 
   function drawCoins() {
+    const magnetOn = magnetFrames > 0;
     for (const c of coinsArr) {
-      const wobble = Math.max(0.15, Math.abs(Math.cos(c.t)) * 0.85 + 0.15);
-      ctx.fillStyle = '#ffe14a';
+      const spin = Math.cos(c.t);          // -1..1 → 3D rotation around Y
+      const wobble = Math.max(0.12, Math.abs(spin));
+      const edge = spin < 0;               // showing the back face
+      // Proximity / magnet glow halo
+      const dxp = c.x - (player.x + player.w / 2);
+      const dyp = c.y - (player.y + player.h / 2);
+      const near = magnetOn || (dxp * dxp + dyp * dyp < 150 * 150);
+      if (near) {
+        const hg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r * 2.4);
+        hg.addColorStop(0, 'rgba(255,225,74,0.5)');
+        hg.addColorStop(1, 'rgba(255,225,74,0)');
+        ctx.fillStyle = hg;
+        ctx.fillRect(c.x - c.r * 2.4, c.y - c.r * 2.4, c.r * 4.8, c.r * 4.8);
+      }
+      // Coin body with vertical gold gradient
+      const g = ctx.createLinearGradient(c.x, c.y - c.r, c.x, c.y + c.r);
+      g.addColorStop(0, edge ? '#c8920a' : '#fff0a0');
+      g.addColorStop(0.5, edge ? '#a8780a' : '#ffe14a');
+      g.addColorStop(1, edge ? '#7a5500' : '#d9a516');
+      ctx.fillStyle = g;
       ctx.beginPath();
       ctx.ellipse(c.x, c.y, c.r * wobble, c.r, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#fff8c0';
+      // Inner ring face (only when showing the front clearly)
+      if (!edge) {
+        ctx.fillStyle = 'rgba(255,248,200,0.85)';
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, (c.r - 5) * wobble, c.r - 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#caa015';
+        ctx.font = 'bold ' + Math.round(c.r * 1.1) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.save();
+        ctx.scale(wobble, 1);
+        ctx.fillText('★', c.x / wobble, c.y);
+        ctx.restore();
+      }
+      // Moving gloss streak
+      const gloss = (Math.sin(c.t * 1.3) * 0.5 + 0.5);
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * wobble) + ')';
       ctx.beginPath();
-      ctx.ellipse(c.x, c.y, (c.r - 4) * wobble, c.r - 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(c.x - c.r * 0.3 * wobble, c.y - c.r * 0.4 + gloss * 4, c.r * 0.18 * wobble, c.r * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
   }
 
   function drawParticles() {
