@@ -596,18 +596,21 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'tornado'];
   function startSetpiece() {
-    const type = setpieceCount % 2 === 0 ? 'coinrush' : 'gauntlet';
+    const type = SETPIECE_TYPES[setpieceCount % SETPIECE_TYPES.length];
     setpieceCount++;
     nextSetpieceAt += 1300;
-    setpiece = { type, t: 0, dur: type === 'coinrush' ? 440 : 560, spawnTimer: 30 };
+    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : 560;
+    setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
-    popText(type === 'coinrush' ? '★ COIN RUSH ★' : '⚡ GAUNTLET ⚡',
-      W / 2, GROUND - 210, type === 'coinrush' ? '#ffe14a' : '#ff3d6e', 1.7);
+    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : '⚡ GAUNTLET ⚡';
+    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : '#ff3d6e';
+    popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
     flashFrame = frame;
-    zoomPunch = Math.max(zoomPunch, 0.05);
+    zoomPunch = Math.max(zoomPunch, type === 'tornado' ? 0.08 : 0.05);
     audio.levelup();
   }
   function updateSetpiece() {
@@ -620,6 +623,25 @@
           coinsArr.push({ x: W + 30 + i * 30, y: baseY + Math.sin(i * 1.3) * 22, r: 14, picked: false, t: Math.random() * 6.28 });
         }
         setpiece.spawnTimer = 20;
+      }
+    } else if (setpiece.type === 'tornado') {
+      // Boss vortex grows in, hovers, throws fast debris the player must dodge
+      setpiece.vortex += (1 - setpiece.vortex) * 0.05;
+      const settling = setpiece.t < 70 || setpiece.t > setpiece.dur - 70;
+      if (!settling && setpiece.spawnTimer <= 0) {
+        const r = rnd();
+        if (r < 0.5) {
+          // ground spike debris — jump
+          obstacles.push({ type: 'spike', x: W + 20, y: GROUND - 34, w: 36, h: 34, vx: 3 });
+        } else if (r < 0.8) {
+          // low flyer — slide
+          obstacles.push({ type: 'overhang', x: W + 20, y: GROUND - 78, w: 42, h: 48, vx: 3 });
+        } else {
+          // bonus coin arc through the chaos
+          const by = GROUND - 90 - rnd() * 80;
+          for (let i = 0; i < 3; i++) coinsArr.push({ x: W + 30 + i * 28, y: by, r: 14, picked: false, t: rnd() * 6.28 });
+        }
+        setpiece.spawnTimer = 42 + Math.floor(rnd() * 16);
       }
     } else {
       if (setpiece.spawnTimer <= 0) {
@@ -635,6 +657,13 @@
       if (setpiece.type === 'gauntlet') {
         runCoins += 80;
         popText('+80 ★  SURVIVED!', W / 2, GROUND - 200, '#19f0ff', 1.5);
+        audio.power();
+      } else if (setpiece.type === 'tornado') {
+        runCoins += 150;
+        popText('+150 ★  BOSS DOWN!', W / 2, GROUND - 200, '#b478ff', 1.6);
+        addRing(W / 2, GROUND - 120, 220, '180,120,255', 40);
+        shake = Math.max(shake, 12);
+        zoomPunch = Math.max(zoomPunch, 0.08);
         audio.power();
       }
       setpiece = null;
@@ -1224,6 +1253,7 @@
 
   function gameOver() {
     state = STATE.OVER;
+    score = Math.floor(score);
     shake = 18;
     zoomPunch = 0.09;
     music.stop();
@@ -1773,7 +1803,7 @@
     }
 
     // Move obstacles
-    obstacles.forEach((o) => (o.x -= speed));
+    obstacles.forEach((o) => (o.x -= speed + (o.vx || 0)));
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
 
     // Player collision circle — matches the drawn orb; shrinks & drops while sliding
@@ -1982,7 +2012,8 @@
       }
     }
 
-    score += 1;
+    // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
+    score += 1 + levelIdx * 0.1;
     tryLevelUp();
     // Achievements (use >= because combo multipliers can skip exact values)
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
@@ -1994,7 +2025,7 @@
     if (levelIdx >= 3 && !hasAch('level_3')) unlock('level_3');
     if (levelIdx >= 5 && !hasAch('level_6')) unlock('level_6');
     if (totalCoins + runCoins >= 100) unlock('coins_100');
-    if (frame % 4 === 0) scoreEl.textContent = score;
+    if (frame % 4 === 0) scoreEl.textContent = Math.floor(score);
 
     if (shake > 0) shake *= 0.9;
   }
@@ -2003,6 +2034,20 @@
   let skyGradient = null;
   let skyGradientH = -1;
   let skyGradientPal = null;
+  // Cached environment gradients — rebuilt only when palette or height changes
+  let envCache = { pal: null, h: -1, haze: null, refl: null };
+  function ensureEnvGradients() {
+    if (envCache.pal === palette && envCache.h === H) return;
+    const haze = ctx.createLinearGradient(0, GROUND - 60, 0, GROUND + 30);
+    haze.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0)');
+    haze.addColorStop(0.7, 'rgba(' + palette.sunRGB + ', 0.10)');
+    haze.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0.20)');
+    const refl = ctx.createLinearGradient(0, GROUND, 0, H);
+    refl.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0.22)');
+    refl.addColorStop(0.5, 'rgba(' + palette.sunRGB + ', 0.07)');
+    refl.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0)');
+    envCache = { pal: palette, h: H, haze, refl };
+  }
   function drawBackground() {
     if (skyGradientH !== H || skyGradientPal !== palette) {
       skyGradient = ctx.createLinearGradient(0, 0, 0, H);
@@ -2191,21 +2236,14 @@
     ctx.fillStyle = palette.ground;
     ctx.fillRect(0, GROUND, W, H - GROUND);
 
+    ensureEnvGradients();
     // Atmospheric haze band at the horizon
-    const haze = ctx.createLinearGradient(0, GROUND - 60, 0, GROUND + 30);
-    haze.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0)');
-    haze.addColorStop(0.7, 'rgba(' + palette.sunRGB + ', 0.10)');
-    haze.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0.20)');
-    ctx.fillStyle = haze;
+    ctx.fillStyle = envCache.haze;
     ctx.fillRect(0, GROUND - 60, W, 90);
 
     // Sun light reflection shimmering down the floor
     const sunCx = W * 0.78;
-    const refl = ctx.createLinearGradient(0, GROUND, 0, H);
-    refl.addColorStop(0, 'rgba(' + palette.sunRGB + ', 0.22)');
-    refl.addColorStop(0.5, 'rgba(' + palette.sunRGB + ', 0.07)');
-    refl.addColorStop(1, 'rgba(' + palette.sunRGB + ', 0)');
-    ctx.fillStyle = refl;
+    ctx.fillStyle = envCache.refl;
     const reflW = 90 + Math.sin(frame * 0.08) * 10;
     ctx.beginPath();
     ctx.moveTo(sunCx - reflW * 0.4, GROUND);
@@ -2581,6 +2619,48 @@
     }
   }
 
+  function drawSetpieceBoss() {
+    if (!setpiece || setpiece.type !== 'tornado') return;
+    const v = setpiece.vortex;
+    if (v < 0.01) return;
+    const bx = W * 0.74;
+    const topY = 30;
+    const botY = GROUND;
+    // Funnel: stacked rotating ellipses, wide at top → narrow at base
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const layers = 11;
+    for (let i = 0; i < layers; i++) {
+      const f = i / (layers - 1);
+      const y = topY + (botY - topY) * f;
+      const rw = (90 - f * 64) * v;
+      const spin = frame * 0.12 + i * 0.5;
+      const ox = Math.cos(spin) * (10 + f * 8);
+      const a = 0.12 + (1 - f) * 0.10;
+      ctx.fillStyle = 'rgba(180,120,255,' + a + ')';
+      ctx.beginPath();
+      ctx.ellipse(bx + ox, y, rw, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(120,220,255,' + (a * 0.6) + ')';
+      ctx.beginPath();
+      ctx.ellipse(bx + ox, y, rw * 0.6, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Swirling debris specks
+    for (let i = 0; i < 14; i++) {
+      const sp = frame * 0.2 + i * 1.3;
+      const f = (i % 7) / 7;
+      const y = topY + (botY - topY) * f;
+      const rw = (90 - f * 64) * v;
+      const px = bx + Math.cos(sp) * rw;
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.3 + 0.3 * Math.sin(sp)) + ')';
+      ctx.beginPath();
+      ctx.arc(px, y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawCoins() {
     const magnetOn = magnetFrames > 0;
     for (const c of coinsArr) {
@@ -2677,6 +2757,7 @@
     drawWeather();
     drawGround();
     drawSpeedLines();
+    drawSetpieceBoss();
     drawCoins();
     drawPowerups();
     drawMystery();
