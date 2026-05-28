@@ -489,6 +489,7 @@
   const jumpV = -17;
 
   let score = 0;
+  let dist = 0;            // pacing driver (distance run) — decoupled from coins
   let runCoins = 0;
   let frame = 0;
   let nextObstacleAt = 60;
@@ -1202,6 +1203,7 @@
     scrollX = 0;
     speed = baseSpeed;
     score = 0;
+    dist = 0;
     runCoins = 0;
     frame = 0;
     nextObstacleAt = 60;
@@ -1624,7 +1626,7 @@
   ];
 
   function spawnPattern() {
-    const pool = PATTERNS.filter((p) => score >= p.minScore);
+    const pool = PATTERNS.filter((p) => dist >= p.minScore);
     const p = pool[Math.floor(rnd() * pool.length)];
     const x0 = W + 20;
     for (const o of p.obs) makeObstacle(o.t, x0 + o.dx);
@@ -1711,7 +1713,7 @@
   }
 
   function tryLevelUp() {
-    const target = Math.min(LEVELS.length - 1, Math.floor(score / LEVEL_SCORE));
+    const target = Math.min(LEVELS.length - 1, Math.floor(dist / LEVEL_SCORE));
     if (target !== levelIdx) {
       levelIdx = target;
       palette = LEVELS[levelIdx];
@@ -1799,7 +1801,7 @@
     if (slowmoFrames > 0) slowmoFrames--;
     // Gentle ramp spread across all 12 levels: ~4.6 at start, reaches the
     // 15 cap only around score ~4780 (level 10). Levels 11-12 hold max intensity.
-    speed = (baseSpeed + Math.min(score / 460, 10.4)) * slowmoT;
+    speed = (baseSpeed + Math.min(dist / 520, 10.4)) * slowmoT;
     scrollX += speed;
     updateWeather();
     if (landBounce > 0.01) landBounce *= 0.8; else landBounce = 0;
@@ -1849,7 +1851,7 @@
     player.trail = player.trail.filter((t) => t.life > 0);
 
     // Set-piece trigger (special section every ~2000 score)
-    if (!setpiece && score >= nextSetpieceAt) startSetpiece();
+    if (!setpiece && dist >= nextSetpieceAt) startSetpiece();
 
     if (setpiece) {
       updateSetpiece();
@@ -1866,7 +1868,7 @@
         if (!isFinite(span)) span = 0;
         // Recovery gap (reaction time) is constant in frames; add the time it
         // takes the pattern's pixel span to clear so the breather stays fair.
-        const breather = Math.max(40, (88 - score / 10 - levelIdx * 2) * (ease || 1));
+        const breather = Math.max(40, (88 - dist / 90 - levelIdx * 2) * (ease || 1));
         const spanFrames = span / Math.max(1, speed);
         let gap = breather + spanFrames + rnd() * 20;
         if (!isFinite(gap)) gap = 70;
@@ -2113,6 +2115,8 @@
       }
     }
 
+    // dist drives all pacing (level / speed / spawns) — steady, coin-independent.
+    dist += 1;
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
     score += 1 + levelIdx * 0.1;
     tryLevelUp();
