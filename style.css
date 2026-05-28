@@ -168,10 +168,26 @@ html, body {
   color: var(--neon-yellow);
   min-width: 56px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 5px;
 }
-
-.chip.combo:empty {
-  visibility: hidden;
+.chip.combo.hidden { visibility: hidden; }
+.combo-meter {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.14);
+  overflow: hidden;
+}
+.combo-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--neon-yellow), var(--neon-pink));
+  transform-origin: left center;
+  transition: transform 0.08s linear;
 }
 
 .btn.revive {

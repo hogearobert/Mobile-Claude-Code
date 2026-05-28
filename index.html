@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=15" />
+  <link rel="stylesheet" href="style.css?v=44" />
 </head>
 <body>
   <div id="app">
@@ -37,7 +37,10 @@
       </div>
       <div class="hud-row sub">
         <div class="chip level"><span id="level">ORIGIN</span></div>
-        <div class="chip combo" id="combo"></div>
+        <div class="chip combo" id="combo">
+          <span id="comboText"></span>
+          <div class="combo-meter"><div id="comboFill" class="combo-fill"></div></div>
+        </div>
       </div>
     </div>
     <div id="controls">
@@ -164,7 +167,7 @@
 
   </div>
 
-  <script src="game.js?v=42"></script>
+  <script src="game.js?v=44"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

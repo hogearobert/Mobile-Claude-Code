@@ -56,7 +56,14 @@
       resume() { const c = ensure(); if (c && c.state === 'suspended') c.resume(); },
       jump() { blip(420, 0.12, 'square', 0.22, 760); },
       djump() { blip(620, 0.14, 'sawtooth', 0.2, 1100); },
-      coin() { blip(880, 0.06, 'sine', 0.25); setTimeout(() => blip(1320, 0.1, 'sine', 0.22), 50); },
+      coin(step) {
+        // Pitch climbs a pentatonic ladder with the combo for a rising-streak feel
+        const ladder = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+        const semi = ladder[Math.min(step || 0, ladder.length - 1)];
+        const f = 880 * Math.pow(2, semi / 12);
+        blip(f, 0.06, 'sine', 0.25);
+        setTimeout(() => blip(f * 1.5, 0.1, 'sine', 0.22), 50);
+      },
       hit() { noise(0.35, 0.5, 1200); blip(110, 0.4, 'sawtooth', 0.35, 55); },
       over() {
         blip(440, 0.18, 'sawtooth', 0.28);
@@ -446,6 +453,8 @@
   let nebula = [];          // far soft colour clouds (atmospheric depth)
   let shootingStars = [];   // occasional sky streaks
   let rings = [];           // expanding shockwave rings on pickups
+  let fgShafts = [];        // foreground light shafts (fast parallax, occluding)
+  let fgMotes = [];         // foreground dust motes drifting close to camera
   function addRing(x, y, maxR, rgb, life) {
     rings.push({ x, y, r: 7, maxR: maxR, life: life || 24, maxLife: life || 24, rgb: rgb });
   }
@@ -1041,6 +1050,24 @@
       });
     }
     shootingStars = [];
+    // Foreground light shafts — tall, soft, fast parallax, pass in front
+    fgShafts = [];
+    let fx = Math.random() * 400;
+    while (fx < W + 500) {
+      fgShafts.push({ x: fx, w: 24 + Math.random() * 46 });
+      fx += 280 + Math.random() * 320;
+    }
+    // Foreground dust motes — closest layer, gentle float
+    fgMotes = [];
+    for (let i = 0; i < 18; i++) {
+      fgMotes.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: 1 + Math.random() * 2.4,
+        sp: 1.3 + Math.random() * 1.2,
+        tw: Math.random() * Math.PI * 2
+      });
+    }
   }
   initParallax();
 
@@ -1198,7 +1225,7 @@
     scoreEl.textContent = '0';
     coinsEl.textContent = totalCoins;
     if (levelEl) levelEl.textContent = palette.name;
-    if (comboEl) comboEl.textContent = '';
+    setComboUI('');
     if (titleSubEl) titleSubEl.textContent = dailyMode ? 'DAILY · ' + todayStr() : '';
     initParallax();
     initWeather();
@@ -1464,6 +1491,12 @@
   const pauseBtn = document.getElementById('pauseBtn');
   const levelEl = document.getElementById('level');
   const comboEl = document.getElementById('combo');
+  const comboTextEl = document.getElementById('comboText');
+  const comboFillEl = document.getElementById('comboFill');
+  function setComboUI(text) {
+    if (comboTextEl) comboTextEl.textContent = text || '';
+    if (comboEl) comboEl.classList.toggle('hidden', !text);
+  }
   const reviveBtn = document.getElementById('reviveBtn');
   const adOverlay = document.getElementById('adOverlay');
   const adCountdown = document.getElementById('adCountdown');
@@ -1854,10 +1887,15 @@
 
     // Decay magnet
     if (magnetFrames > 0) magnetFrames--;
-    // Combo decay
-    if (combo > 0 && frame - lastCoinFrame > comboWindow()) {
-      combo = 0;
-      if (comboEl) comboEl.textContent = '';
+    // Combo decay + live meter fill (drains as the window runs out)
+    if (combo > 0) {
+      if (frame - lastCoinFrame > comboWindow()) {
+        combo = 0;
+        setComboUI('');
+      } else if (comboFillEl) {
+        const rem = 1 - (frame - lastCoinFrame) / comboWindow();
+        comboFillEl.style.transform = 'scaleX(' + Math.max(0, rem) + ')';
+      }
     }
     // Floating texts
     texts.forEach((t) => { t.y -= 0.8; t.life--; });
@@ -1890,6 +1928,18 @@
     // Rings — expand + fade
     rings.forEach((rg) => { rg.r += (rg.maxR - rg.r) * 0.16; rg.life--; });
     rings = rings.filter((rg) => rg.life > 0);
+    // Foreground shafts — fast parallax (1.8x), wrap around
+    fgShafts.forEach((sh) => {
+      sh.x -= speed * 1.8;
+      if (sh.x + sh.w < -20) sh.x += (W + 600);
+    });
+    // Foreground motes — closest, drift fastest + bob
+    fgMotes.forEach((mo) => {
+      mo.x -= speed * mo.sp;
+      mo.tw += 0.04;
+      mo.y += Math.sin(mo.tw) * 0.4;
+      if (mo.x < -6) { mo.x = W + 6; mo.y = Math.random() * H; }
+    });
     mountains.forEach((m) => {
       m.x -= speed * 0.15;
     });
@@ -1959,9 +2009,9 @@
         lastCoinFrame = frame;
         const m = comboMult();
         score += 5 * m;
-        audio.coin();
+        audio.coin(combo - 1);
         addRing(c.x, c.y, 30, '255,225,74', 18);
-        if (comboEl) comboEl.textContent = combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '';
+        setComboUI(combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '');
         if (combo === 5 || combo === 10 || combo === 15 || combo === 20 || combo === 30) {
           popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
           shake = Math.max(shake, 4);
@@ -2619,6 +2669,30 @@
     }
   }
 
+  // Closest parallax layer — drawn in front of the player for real depth.
+  // Kept soft/translucent so it never hides gameplay.
+  function drawForeground() {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // Soft vertical light shafts sweeping past the camera
+    for (const sh of fgShafts) {
+      const g = ctx.createLinearGradient(sh.x, 0, sh.x + sh.w, 0);
+      g.addColorStop(0, 'rgba(' + palette.accent + ',0)');
+      g.addColorStop(0.5, 'rgba(' + palette.accent + ',0.05)');
+      g.addColorStop(1, 'rgba(' + palette.accent + ',0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(sh.x, 0, sh.w, H);
+    }
+    // Dust motes — tiny bright specks closest to the lens
+    for (const mo of fgMotes) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.18 + 0.16 * Math.sin(mo.tw)) + ')';
+      ctx.beginPath();
+      ctx.arc(mo.x, mo.y, mo.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawSetpieceBoss() {
     if (!setpiece || setpiece.type !== 'tornado') return;
     const v = setpiece.vortex;
@@ -2765,6 +2839,7 @@
     drawRings();
     drawObstacles();
     drawPlayer();
+    drawForeground();
     drawTexts();
     // Set-piece colour wash + progress bar
     if (setpiece) {
