@@ -343,7 +343,16 @@
       },
       toggle() { this.setMuted(!muted); return muted; },
       isMuted() { return muted; },
-      isPlaying() { return active; }
+      isPlaying() { return active; },
+      // Duck the music briefly so big SFX/events punch through, then swell back.
+      duck() {
+        if (!active || muted || !ac || !master) return;
+        const now = ac.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(master.gain.value, now);
+        master.gain.linearRampToValueAtTime(targetVol() * 0.35, now + 0.05);
+        master.gain.linearRampToValueAtTime(targetVol(), now + 0.55);
+      }
     };
   })();
   const overlay = document.getElementById('overlay');
@@ -671,6 +680,7 @@
         runCoins += 150;
         popText('+150 ★  BOSS DOWN!', W / 2, GROUND - 200, '#b478ff', 1.6);
         addRing(W / 2, GROUND - 120, 220, '180,120,255', 40);
+        music.duck();
         shake = Math.max(shake, 12);
         zoomPunch = Math.max(zoomPunch, 0.08);
         audio.power();
@@ -716,6 +726,7 @@
     else if (reward.extra === 'magnet') magnetFrames = 60 * 6;
     popText(reward.msg + ' +' + reward.coins + '★', player.x + player.w / 2, GROUND - 220, reward.col, 1.4);
     audio.power();
+    music.duck();
     addRing(player.x + player.w / 2, GROUND - 220, 130, '255,225,74', 34);
     flashFrame = frame;
     zoomPunch = Math.max(zoomPunch, 0.055);
@@ -1585,24 +1596,52 @@
   }
 
   // ---------- Spawning ----------
-  function spawnObstacle() {
-    const types = ['spike', 'block', 'tall', 'flying', 'overhang'];
-    let t = types[Math.floor(rnd() * types.length)];
-    if (score < 150 && t === 'flying') t = 'spike';
-    if (score < 250 && t === 'overhang') t = 'block'; // teach jump first, then slide
+  // One obstacle by type at a given x (used by the pattern spawner)
+  function makeObstacle(t, x) {
+    if (t === 'spike')   obstacles.push({ type: t, x, y: GROUND - 30, w: 36, h: 30 });
+    else if (t === 'block')   obstacles.push({ type: t, x, y: GROUND - 44, w: 44, h: 44 });
+    else if (t === 'tall')    obstacles.push({ type: t, x, y: GROUND - 80, w: 32, h: 80 });
+    else if (t === 'flying')  obstacles.push({ type: t, x, y: GROUND - 140, w: 56, h: 32 });
+    else if (t === 'overhang')obstacles.push({ type: t, x, y: GROUND - 80, w: 46, h: 50 });
+  }
 
-    if (t === 'spike') {
-      obstacles.push({ type: t, x: W + 20, y: GROUND - 30, w: 36, h: 30 });
-    } else if (t === 'block') {
-      obstacles.push({ type: t, x: W + 20, y: GROUND - 44, w: 44, h: 44 });
-    } else if (t === 'tall') {
-      obstacles.push({ type: t, x: W + 20, y: GROUND - 80, w: 32, h: 80 });
-    } else if (t === 'flying') {
-      obstacles.push({ type: t, x: W + 20, y: GROUND - 140, w: 56, h: 32 });
-    } else if (t === 'overhang') {
-      // Hangs from above — must SLIDE under it (gap of ~30px at floor level)
-      obstacles.push({ type: t, x: W + 20, y: GROUND - 80, w: 46, h: 50 });
+  // Telegraphed, hand-designed obstacle PATTERNS — fair & learnable, not random.
+  // dx = pixel offset within the pattern; `coins` = optional reward arc above.
+  // minScore gates complexity so the run teaches before it tests.
+  const PATTERNS = [
+    { id: 'single',     minScore: 0,    span: 0,   obs: [{ t: 'spike', dx: 0 }] },
+    { id: 'block',      minScore: 0,    span: 0,   obs: [{ t: 'block', dx: 0 }] },
+    { id: 'tall',       minScore: 120,  span: 0,   obs: [{ t: 'tall', dx: 0 }] },
+    { id: 'flyer',      minScore: 180,  span: 0,   obs: [{ t: 'flying', dx: 0 }] },
+    { id: 'double',     minScore: 240,  span: 150, obs: [{ t: 'spike', dx: 0 }, { t: 'spike', dx: 150 }] },
+    { id: 'overhang',   minScore: 300,  span: 0,   obs: [{ t: 'overhang', dx: 0 }], coins: { dx: 0, lowArc: true } },
+    { id: 'jump_slide', minScore: 420,  span: 230, obs: [{ t: 'spike', dx: 0 }, { t: 'overhang', dx: 230 }] },
+    { id: 'slide_jump', minScore: 520,  span: 230, obs: [{ t: 'overhang', dx: 0 }, { t: 'spike', dx: 230 }] },
+    { id: 'stairs',     minScore: 640,  span: 200, obs: [{ t: 'block', dx: 0 }, { t: 'tall', dx: 200 }], coins: { dx: 100, arc: true } },
+    { id: 'corridor',   minScore: 900,  span: 440, obs: [{ t: 'spike', dx: 0 }, { t: 'overhang', dx: 220 }, { t: 'spike', dx: 440 }] },
+    { id: 'flyer_run',  minScore: 1100, span: 320, obs: [{ t: 'flying', dx: 0 }, { t: 'spike', dx: 320 }], coins: { dx: 0, midArc: true } },
+    { id: 'gauntlet3',  minScore: 1500, span: 560, obs: [{ t: 'overhang', dx: 0 }, { t: 'spike', dx: 230 }, { t: 'overhang', dx: 440 }, { t: 'spike', dx: 560 }] }
+  ];
+
+  function spawnPattern() {
+    const pool = PATTERNS.filter((p) => score >= p.minScore);
+    const p = pool[Math.floor(rnd() * pool.length)];
+    const x0 = W + 20;
+    for (const o of p.obs) makeObstacle(o.t, x0 + o.dx);
+    // Optional reward coins woven into the pattern
+    if (p.coins) {
+      const cx0 = x0 + (p.coins.dx || 0);
+      if (p.coins.lowArc) {
+        // coins to grab while sliding under the overhang
+        for (let i = 0; i < 3; i++) coinsArr.push({ x: cx0 + i * 26, y: GROUND - 22, r: 13, picked: false, t: rnd() * 6.28 });
+      } else if (p.coins.arc || p.coins.midArc) {
+        const baseY = GROUND - (p.coins.midArc ? 150 : 120);
+        for (let i = 0; i < 5; i++) {
+          coinsArr.push({ x: cx0 + i * 30, y: baseY - Math.sin((i / 4) * Math.PI) * 50, r: 13, picked: false, t: rnd() * 6.28 });
+        }
+      }
     }
+    return p.span; // pixel length of the pattern (0 for singles)
   }
 
   // Lift a coin (or pickup) so it doesn't spawn inside / next to any obstacle.
@@ -1696,6 +1735,7 @@
       flashFrame = frame;
       zoomPunch = Math.max(zoomPunch, 0.06);
       addRing(player.x + player.w / 2, player.y + player.h / 2, 160, palette.accent, 38);
+      music.duck();
       missionEvent('level', levelIdx);
       music.setLevel(levelIdx);
     }
@@ -1817,9 +1857,12 @@
       // Normal spawning (with dynamic difficulty ease)
       const ease = difficultyEase();
       if (frame >= nextObstacleAt) {
-        spawnObstacle();
-        const gap = Math.max(45, (95 - score / 8 - levelIdx * 3) * ease);
-        nextObstacleAt = frame + gap + rnd() * 30;
+        const span = spawnPattern();
+        // Recovery gap (reaction time) is constant in frames; add the time it
+        // takes the pattern's pixel span to clear so the breather stays fair.
+        const breather = Math.max(42, (90 - score / 9 - levelIdx * 3) * ease);
+        const spanFrames = span / Math.max(1, speed);
+        nextObstacleAt = frame + breather + spanFrames + rnd() * 22;
       }
       if (frame >= nextCoinAt) {
         spawnCoin();
