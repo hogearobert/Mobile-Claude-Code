@@ -579,7 +579,7 @@
   let deathScores = [];
   try { deathScores = JSON.parse(readLS(SK.deathScores, '[]')) || []; } catch (_) { deathScores = []; }
   function difficultyEase() {
-    if (deathScores.length < 3) return 0;
+    if (deathScores.length < 3) return 1;  // neutral until we know the player
     const last3 = deathScores.slice(-3);
     const avg = last3.reduce((a, b) => a + b, 0) / last3.length;
     if (avg < 200) return 1.4;    // very easy — wider gaps
@@ -1856,13 +1856,21 @@
     } else {
       // Normal spawning (with dynamic difficulty ease)
       const ease = difficultyEase();
+      // Safety net: if the next-spawn time ever became non-finite or drifted too
+      // far (a stall), force it back into range so the track can never go empty.
+      if (!isFinite(nextObstacleAt) || nextObstacleAt > frame + 180) {
+        nextObstacleAt = frame + 1;
+      }
       if (frame >= nextObstacleAt) {
-        const span = spawnPattern();
+        let span = spawnPattern();
+        if (!isFinite(span)) span = 0;
         // Recovery gap (reaction time) is constant in frames; add the time it
         // takes the pattern's pixel span to clear so the breather stays fair.
-        const breather = Math.max(42, (90 - score / 9 - levelIdx * 3) * ease);
+        const breather = Math.max(40, (88 - score / 10 - levelIdx * 2) * (ease || 1));
         const spanFrames = span / Math.max(1, speed);
-        nextObstacleAt = frame + breather + spanFrames + rnd() * 22;
+        let gap = breather + spanFrames + rnd() * 20;
+        if (!isFinite(gap)) gap = 70;
+        nextObstacleAt = frame + Math.min(gap, 170);
       }
       if (frame >= nextCoinAt) {
         spawnCoin();
