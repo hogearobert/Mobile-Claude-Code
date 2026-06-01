@@ -1637,7 +1637,12 @@
     { id: 'stairs',     minScore: 640,  span: 200, obs: [{ t: 'block', dx: 0 }, { t: 'tall', dx: 200 }], coins: { dx: 100, arc: true } },
     { id: 'corridor',   minScore: 900,  span: 440, obs: [{ t: 'spike', dx: 0 }, { t: 'overhang', dx: 220 }, { t: 'spike', dx: 440 }] },
     { id: 'flyer_run',  minScore: 1100, span: 320, obs: [{ t: 'flying', dx: 0 }, { t: 'spike', dx: 320 }], coins: { dx: 0, midArc: true } },
-    { id: 'gauntlet3',  minScore: 1500, span: 560, obs: [{ t: 'overhang', dx: 0 }, { t: 'spike', dx: 230 }, { t: 'overhang', dx: 440 }, { t: 'spike', dx: 560 }] }
+    { id: 'gauntlet3',  minScore: 1500, span: 560, obs: [{ t: 'overhang', dx: 0 }, { t: 'spike', dx: 230 }, { t: 'overhang', dx: 440 }, { t: 'spike', dx: 560 }] },
+    // Extra variety — all telegraphed with proven, clearable spacing.
+    { id: 'triple_hop', minScore: 700,  span: 320, obs: [{ t: 'spike', dx: 0 }, { t: 'spike', dx: 160 }, { t: 'spike', dx: 320 }], coins: { dx: 80, arc: true } },
+    { id: 'double_slide', minScore: 820, span: 300, obs: [{ t: 'overhang', dx: 0 }, { t: 'overhang', dx: 300 }], coins: { dx: 0, lowArc: true } },
+    { id: 'flyer_pair', minScore: 1000, span: 360, obs: [{ t: 'flying', dx: 0 }, { t: 'flying', dx: 360 }], coins: { dx: 120, lowArc: true } },
+    { id: 'weave',      minScore: 1300, span: 680, obs: [{ t: 'spike', dx: 0 }, { t: 'overhang', dx: 220 }, { t: 'spike', dx: 440 }, { t: 'overhang', dx: 680 }] }
   ];
 
   function spawnPattern() {
@@ -2903,6 +2908,88 @@
     ctx.restore();
   }
 
+  // Wet-floor reflections — the iconic synthwave mirror. Mirrors the hero,
+  // hazards and pickups onto the grid floor, additively, fading with the
+  // object's height so high objects barely register (physically plausible).
+  function drawReflections() {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, GROUND, W, H - GROUND);
+    ctx.clip();
+    ctx.translate(0, GROUND * 2);
+    ctx.scale(1, -1);
+    ctx.globalCompositeOperation = 'lighter';
+    const FADE = 240;
+
+    // Obstacle silhouettes in their signature hazard colour
+    for (const o of obstacles) {
+      const a = 0.22 * Math.max(0, 1 - Math.max(0, GROUND - (o.y + o.h)) / FADE);
+      if (a < 0.02) continue;
+      ctx.globalAlpha = a;
+      if (o.type === 'spike') {
+        ctx.fillStyle = 'rgba(255,61,110,1)';
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y + o.h);
+        ctx.lineTo(o.x + o.w / 2, o.y);
+        ctx.lineTo(o.x + o.w, o.y + o.h);
+        ctx.closePath();
+        ctx.fill();
+      } else if (o.type === 'flying') {
+        ctx.fillStyle = 'rgba(25,240,255,1)';
+        ctx.beginPath();
+        ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2, o.h / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = o.type === 'overhang' ? 'rgba(255,177,61,1)' : 'rgba(255,61,110,1)';
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+      }
+    }
+
+    // Coins — cheap gold ellipses (no gradients, keeps Coin Rush fast)
+    ctx.fillStyle = 'rgba(255,225,74,1)';
+    for (const c of coinsArr) {
+      const a = 0.5 * Math.max(0, 1 - (GROUND - c.y) / FADE);
+      if (a < 0.03) continue;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, c.r * 0.8, c.r, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Powerups
+    for (const p of powerups) {
+      const a = 0.4 * Math.max(0, 1 - (GROUND - p.y) / FADE);
+      if (a < 0.03) continue;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.type === 'magnet' ? 'rgba(255,225,74,1)' : 'rgba(25,240,255,1)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Player orb — the headline reflection (soft halo + bright core)
+    {
+      const sk = currentSkin();
+      const cx = player.x + player.w / 2;
+      const cyp = player.y + player.h / 2;
+      const a = 0.55 * Math.max(0.18, 1 - Math.max(0, GROUND - (player.y + player.h)) / 300);
+      ctx.globalAlpha = a;
+      const r = 22;
+      const halo = ctx.createRadialGradient(cx, cyp, 0, cx, cyp, r * 2.2);
+      halo.addColorStop(0, sk.halo[0]);
+      halo.addColorStop(1, 'rgba(' + sk.trail + ',0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(cx - r * 2.2, cyp - r * 2.2, r * 4.4, r * 4.4);
+      ctx.fillStyle = 'rgba(' + sk.trail + ',0.85)';
+      ctx.beginPath();
+      ctx.arc(cx, cyp, r * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   function draw() {
     ctx.save();
     // Camera zoom-punch (level up / impacts) — eases back each frame
@@ -2919,6 +3006,7 @@
     drawBackground();
     drawWeather();
     drawGround();
+    drawReflections();
     drawSpeedLines();
     drawSetpieceBoss();
     drawCoins();
@@ -2940,6 +3028,18 @@
       ctx.fillRect(0, GROUND + 2, W * prog, 4);
     }
     ctx.restore();
+
+    // Combo "heat" — the hotter the streak, the more the arena glows in the
+    // level's signature colour. Skilful play literally lights up the screen.
+    const heat = Math.min(combo, 20) / 20;
+    if (state === STATE.PLAY && heat > 0.25) {
+      const pulse = 0.8 + 0.2 * Math.sin(frame * 0.2);
+      const hg = ctx.createRadialGradient(W / 2, GROUND - 160, H * 0.18, W / 2, GROUND - 160, H * 0.66);
+      hg.addColorStop(0, 'rgba(' + palette.sunRGB + ',0)');
+      hg.addColorStop(1, 'rgba(' + palette.sunRGB + ',' + (0.12 * heat * pulse).toFixed(3) + ')');
+      ctx.fillStyle = hg;
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // Full-screen white flash (level up / shield save / revive)
     const flashAge = frame - flashFrame;
