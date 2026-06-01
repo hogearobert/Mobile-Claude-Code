@@ -521,6 +521,11 @@
   let shake = 0;
   let lastJumpFrame = -100;
   let inputGraceUntil = 0;
+  // Roll angle for the grounded ball — accumulates in radians at a rate that
+  // matches the world scroll, so the orb visually rolls "without slipping".
+  // Pure visual; collision uses the unrotated circle.
+  let groundRoll = 0;
+  let airframes = 0;
 
   // ---------- Levels (palette + difficulty) ----------
   const LEVELS = [
@@ -1312,6 +1317,8 @@
     shake = 0;
     lastJumpFrame = -100;
     inputGraceUntil = 4;
+    groundRoll = 0;
+    airframes = 0;
     levelIdx = 0;
     palette = LEVELS[0];
     skyGradient = null;
@@ -1940,6 +1947,17 @@
         }
         addRing(player.x + player.w / 2, GROUND, 40, '255,255,255', 16);
         landBounce = Math.min(1, 0.35 + fallVy * 0.04); // squash impulse scales with impact
+        // Air-time bonus — rewards committed long jumps (also covers double jumps,
+        // since airframes counts continuous time off the floor)
+        if (airframes > 35) {
+          const bonus = Math.min(60, Math.floor(airframes / 1.2));
+          score += bonus * feverScoreMult();
+          popText('+' + (bonus * feverScoreMult()) + ' AIR!', player.x + player.w / 2, GROUND - 80, '#ffe14a', 1.05);
+          addRing(player.x + player.w / 2, GROUND - 18, 46, '255,225,74', 18);
+          audio.coin(3);
+          addFever(0.05);
+        }
+        airframes = 0;
       }
       player.onGround = true;
       player.jumps = 0;
@@ -1947,6 +1965,12 @@
     } else {
       player.onGround = false;
       player.rot += 0.15;
+      airframes++;
+    }
+    // Accumulate rolling angle when grounded — angle/frame = speed / radius
+    // so the orb rolls without slipping (one full turn per ~circumference px).
+    if (player.onGround && !player.sliding) {
+      groundRoll += speed / 22;
     }
     // Slide squash animation (0 = standing, 1 = fully crouched)
     const slideTarget = player.sliding && player.onGround ? 1 : 0;
@@ -2171,7 +2195,17 @@
         const ny = o.y < pcy ? (pcy > o.y + o.h ? o.y + o.h : pcy) : o.y;
         const gdx = pcx - nx, gdy = pcy - ny;
         const gap = Math.sqrt(gdx * gdx + gdy * gdy) - pcr;
-        if (gap > 0 && gap < 18) {
+        if (gap > 0 && gap < 7) {
+          // Razor-thin pass — extra reward + slow-mo flicker as a "clutch" cue
+          score += 25 * feverScoreMult();
+          popText('FOARTE APROAPE! +' + (25 * feverScoreMult()), pcx, pcy - 48, '#ff3df0', 1.2);
+          addRing(pcx, pcy, 60, '255,61,240', 24);
+          audio.nearmiss();
+          slowmoFrames = Math.max(slowmoFrames, 8);
+          glitchFrame = frame;
+          shake = Math.max(shake, 6);
+          addFever(0.12);
+        } else if (gap > 0 && gap < 18) {
           score += 10 * feverScoreMult();
           popText('APROAPE! +' + (10 * feverScoreMult()), pcx, pcy - 46, '#19f0ff', 1.0);
           addRing(pcx, pcy, 46, '120,230,255', 16);
@@ -2523,20 +2557,28 @@
 
   function drawPlayer() {
     const sk = currentSkin();
-    // Light pool the orb casts on the ground (sells dynamic lighting)
+    // Light pool the orb casts on the ground (sells dynamic lighting).
+    // When grounded it pulses with the roll cycle and stretches forward with
+    // run speed, so the shadow visibly feels the motion instead of sitting still.
     {
+      const grounded = player.onGround;
       const lx = player.x + player.w / 2;
-      const air = Math.max(0, GROUND - (player.y + player.h)); // height off floor
+      const air = Math.max(0, GROUND - (player.y + player.h));
+      const rollPulse  = grounded ? (1 + Math.sin(groundRoll * 2) * 0.10) : 1;
+      const speedStretch = grounded ? 1 + Math.min(speed / 30, 0.40) : 1;
+      const lxOff = grounded ? Math.sin(groundRoll * 2) * 1.6 : 0;
       const spread = 34 + Math.min(air * 0.25, 30);
       const la = 0.5 * Math.max(0.2, 1 - air / 260);
-      const lg = ctx.createRadialGradient(lx, GROUND, 0, lx, GROUND, spread);
+      const sx = spread * speedStretch * rollPulse;
+      const sy = spread * 0.32 / Math.max(0.9, speedStretch) * rollPulse;
+      const lg = ctx.createRadialGradient(lx + lxOff, GROUND, 0, lx + lxOff, GROUND, sx);
       lg.addColorStop(0, 'rgba(' + sk.trail + ', ' + (la * 0.7) + ')');
       lg.addColorStop(1, 'rgba(' + sk.trail + ', 0)');
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = lg;
       ctx.beginPath();
-      ctx.ellipse(lx, GROUND, spread, spread * 0.32, 0, 0, Math.PI * 2);
+      ctx.ellipse(lx + lxOff, GROUND, sx, sy, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -2554,9 +2596,31 @@
 
     const cx = player.x + player.w / 2;
     const sT = player.slideT;
+    // Subtle vertical bob in the roll cycle — small (~1px) but reads as life.
+    // Zero while airborne or sliding so it never fights other animations.
+    const groundedBob = (player.onGround && sT < 0.15) ? Math.sin(groundRoll * 2) * 1.0 : 0;
     // When sliding, the orb drops to the floor and squashes into a flat ellipse
-    const cy = (player.y + player.h / 2) + ((GROUND - 16) - (player.y + player.h / 2)) * sT;
+    const cy = (player.y + player.h / 2) + ((GROUND - 16) - (player.y + player.h / 2)) * sT + groundedBob;
     const baseR = 22;
+
+    // Motion smears — short horizontal streaks trailing behind the orb when
+    // running fast (speed > 8). Sells the speed without spamming particles.
+    if (player.onGround && speed > 8 && sT < 0.4) {
+      const smearN = Math.min(3, Math.floor((speed - 8) / 2) + 1);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < smearN; i++) {
+        const off = (i + 1) * 14;
+        const a = (0.22 - i * 0.05) * Math.min(1, (speed - 8) / 5);
+        ctx.strokeStyle = 'rgba(' + sk.trail + ',' + a.toFixed(3) + ')';
+        ctx.lineWidth = 2 - i * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(cx - baseR * 1.2 - off, cy);
+        ctx.lineTo(cx - baseR * 1.2 - off - 22, cy);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     const pulse = (1 + Math.sin(frame * 0.18) * 0.06);
     // Combine slide squash with a transient landing squash-bounce
     const sqX = (1 + sT * 0.55) * (1 + landBounce * 0.45);
@@ -2619,6 +2683,32 @@
     ctx.beginPath();
     ctx.arc(0, 0, baseR * pulse, 0, Math.PI * 2);
     ctx.fill();
+    // Rolling surface — a darker trailing hemisphere + a bright "continent" pip
+    // orbit the orb at the physically-correct rate. Clipped to the body so
+    // they never poke past the silhouette; skipped during slide for clean squash.
+    if (player.onGround && sT < 0.35) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR * pulse, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.rotate(groundRoll);
+      // Far hemisphere shading — the "back of the planet"
+      ctx.fillStyle = 'rgba(8, 6, 24, 0.22)';
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR * pulse, -Math.PI / 2, Math.PI / 2);
+      ctx.fill();
+      // Bright equatorial pip — the unmistakable rolling cue
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.beginPath();
+      ctx.arc(baseR * 0.58, 0, baseR * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      // Small counter-pip on the back side for parallax depth
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      ctx.beginPath();
+      ctx.arc(-baseR * 0.6, baseR * 0.18, baseR * 0.10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     // Specular highlight (upper-left)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.beginPath();
