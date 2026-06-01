@@ -4,6 +4,26 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
+  // ---------- Bloom post-processing (offscreen blur buffer) ----------
+  // A quarter-resolution copy of the frame is blurred and added back additively,
+  // giving every neon source a soft glow halo — the modern synthwave look.
+  // Cheap (small buffer, GPU filter) and feature-detected so old browsers just
+  // get the original render.
+  const bloomCanvas = document.createElement('canvas');
+  const bctx = bloomCanvas.getContext('2d');
+  let bloomOK = false;
+  (function detectBloom() {
+    try {
+      if (bctx && 'filter' in bctx) {
+        bctx.filter = 'blur(2px)';
+        bloomOK = bctx.filter === 'blur(2px)';
+        bctx.filter = 'none';
+      }
+    } catch (_) { bloomOK = false; }
+  })();
+  const BLOOM_SCALE = 0.25;   // bloom buffer = 1/4 of canvas in each axis
+  const BLOOM_BLUR = 4;       // blur radius in bloom-buffer pixels
+
   // ---------- Audio (procedural Web Audio, no asset files) ----------
   const audio = (() => {
     let ac, master;
@@ -386,6 +406,8 @@
     canvas.height = Math.round(vh * DPR);
     canvas.style.width = vw + 'px';
     canvas.style.height = vh + 'px';
+    bloomCanvas.width = Math.max(2, Math.round(canvas.width * BLOOM_SCALE));
+    bloomCanvas.height = Math.max(2, Math.round(canvas.height * BLOOM_SCALE));
     const scale = (vw / W) * DPR;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     try {
@@ -533,6 +555,64 @@
   let shieldFlashFrame = -1000;
   let invincibleUntil = -1;
   let reviveUsed = false;
+
+  // ---------- OVERDRIVE / Fever (build-a-meter → multiplier frenzy) ----------
+  // Coins, near-misses and combo milestones charge the meter. Full = OVERDRIVE:
+  // auto-magnet, tripled score, doubled coins and the screen goes wild. The
+  // craving to re-trigger it is the core "one more run" hook.
+  let feverMeter = 0;       // 0..1 charge
+  let feverActive = false;
+  let feverFrames = 0;      // frames remaining while active
+  const FEVER_DUR = 60 * 8; // 8 seconds of overdrive
+  const FEVER_MULT = 3;
+  function feverScoreMult() { return feverActive ? FEVER_MULT : 1; }
+  function addFever(amt) {
+    if (feverActive || feverMeter >= 1) return;
+    feverMeter = Math.min(1, feverMeter + amt);
+    if (feverMeter >= 1) startFever();
+  }
+  function startFever() {
+    feverActive = true;
+    feverFrames = FEVER_DUR;
+    feverMeter = 1;
+    magnetFrames = Math.max(magnetFrames, FEVER_DUR + 30);
+    popText('⚡ OVERDRIVE ⚡', player.x + player.w / 2, GROUND - 220, '#ff3df0', 1.9);
+    flashFrame = frame;
+    glitchFrame = frame;
+    zoomPunch = Math.max(zoomPunch, 0.11);
+    shake = Math.max(shake, 13);
+    slowmoFrames = Math.max(slowmoFrames, 16); // brief dramatic entry
+    addRing(player.x + player.w / 2, player.y + player.h / 2, 250, '255,61,240', 46);
+    music.duck();
+    audio.power();
+    audio.levelup();
+    if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20, 40, 70]); } catch (_) {} }
+    for (let i = 0; i < 40; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = Math.random() * 8 + 3;
+      pushParticle(player.x + player.w / 2, player.y + player.h / 2,
+        Math.cos(a) * v, Math.sin(a) * v, 50,
+        ['#ff3df0', '#19f0ff', '#ffe14a', '#fff'][i % 4], Math.random() * 3 + 2);
+    }
+  }
+  function endFever() {
+    if (!feverActive) return;
+    feverActive = false;
+    feverMeter = 0;
+    feverFrames = 0;
+    popText('COMBO PĂSTRAT!', player.x + player.w / 2, GROUND - 200, '#19f0ff', 1.2);
+    zoomPunch = Math.max(zoomPunch, 0.04);
+  }
+  function updateFeverUI() {
+    if (!feverFillEl) return;
+    const f = feverActive ? feverFrames / FEVER_DUR : feverMeter;
+    feverFillEl.style.transform = 'scaleX(' + Math.max(0, Math.min(1, f)) + ')';
+    if (feverBarEl) {
+      feverBarEl.classList.toggle('charged', feverMeter >= 1 && !feverActive);
+      feverBarEl.classList.toggle('active', feverActive);
+      feverBarEl.classList.toggle('hidden', feverMeter <= 0 && !feverActive);
+    }
+  }
 
   // ---------- Floating texts ----------
   let texts = [];
@@ -1244,6 +1324,10 @@
     shieldFlashFrame = -1000;
     invincibleUntil = -1;
     reviveUsed = false;
+    feverMeter = 0;
+    feverActive = false;
+    feverFrames = 0;
+    updateFeverUI();
     texts = [];
     slowmoFrames = 0;
     flashFrame = -1000;
@@ -1521,6 +1605,8 @@
   const comboEl = document.getElementById('combo');
   const comboTextEl = document.getElementById('comboText');
   const comboFillEl = document.getElementById('comboFill');
+  const feverBarEl = document.getElementById('feverBar');
+  const feverFillEl = document.getElementById('feverFill');
   function setComboUI(text) {
     if (comboTextEl) comboTextEl.textContent = text || '';
     if (comboEl) comboEl.classList.toggle('hidden', !text);
@@ -1593,6 +1679,10 @@
 
   function doRevive() {
     reviveUsed = true;
+    feverActive = false;
+    feverMeter = 0;
+    feverFrames = 0;
+    updateFeverUI();
     obstacles = obstacles.filter((o) => o.x > W * 0.55);
     powerups = powerups.filter((p) => p.x > W * 0.55);
     player.y = GROUND - player.h - 40;
@@ -2082,10 +2172,11 @@
         const gdx = pcx - nx, gdy = pcy - ny;
         const gap = Math.sqrt(gdx * gdx + gdy * gdy) - pcr;
         if (gap > 0 && gap < 18) {
-          score += 10;
-          popText('APROAPE! +10', pcx, pcy - 46, '#19f0ff', 1.0);
+          score += 10 * feverScoreMult();
+          popText('APROAPE! +' + (10 * feverScoreMult()), pcx, pcy - 46, '#19f0ff', 1.0);
           addRing(pcx, pcy, 46, '120,230,255', 16);
           audio.nearmiss();
+          addFever(0.05);
         }
       }
     }
@@ -2094,21 +2185,23 @@
       const dy = c.y - pcy;
       if (dx * dx + dy * dy < (c.r + pcr + 6) * (c.r + pcr + 6)) {
         c.picked = true;
-        runCoins++;
+        runCoins += feverActive ? 2 : 1;
         missionEvent('coin');
         if (frame - lastCoinFrame < comboWindow()) combo++;
         else combo = 1;
         lastCoinFrame = frame;
         const m = comboMult();
-        score += 5 * m;
+        score += 5 * m * feverScoreMult();
         audio.coin(combo - 1);
-        addRing(c.x, c.y, 30, '255,225,74', 18);
+        addRing(c.x, c.y, 30, feverActive ? '255,61,240' : '255,225,74', 18);
         setComboUI(combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '');
+        addFever(0.035);
         if (combo === 5 || combo === 10 || combo === 15 || combo === 20 || combo === 30) {
           popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
           shake = Math.max(shake, 4);
           addRing(c.x, c.y, 50, '255,225,74', 22);
           missionEvent('combo', combo);
+          addFever(0.08);
         }
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * Math.PI * 2;
@@ -2154,10 +2247,17 @@
       }
     }
 
+    // OVERDRIVE countdown — keep the magnet topped up, end with a flourish.
+    if (feverActive) {
+      magnetFrames = Math.max(magnetFrames, 2);
+      if (--feverFrames <= 0) endFever();
+    }
+    if (frame % 2 === 0) updateFeverUI();
+
     // dist drives all pacing (level / speed / spawns) — steady, coin-independent.
     dist += 1;
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
-    score += 1 + levelIdx * 0.1;
+    score += (1 + levelIdx * 0.1) * feverScoreMult();
     tryLevelUp();
     // Achievements (use >= because combo multipliers can skip exact values)
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
@@ -2544,6 +2644,19 @@
       }
     }
     ctx.restore();
+
+    // OVERDRIVE aura — hue-cycling energy rings pulsing around the orb
+    if (feverActive) {
+      const hue = (frame * 6) % 360;
+      for (let k = 0; k < 3; k++) {
+        const rr = baseR * (1.6 + k * 0.45) + Math.sin(frame * 0.3 + k) * 4;
+        ctx.strokeStyle = 'hsla(' + ((hue + k * 50) % 360) + ', 100%, 65%, ' + (0.55 - k * 0.16) + ')';
+        ctx.lineWidth = 3 - k * 0.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
 
     // Magnet field
     if (magnetFrames > 0) {
@@ -2990,6 +3103,30 @@
     ctx.globalAlpha = 1;
   }
 
+  // Additively blend the blurred quarter-res frame back over the scene so every
+  // bright neon source blooms. Strength swells hard during OVERDRIVE.
+  function applyBloom() {
+    if (!bloomOK) return;
+    const bw = bloomCanvas.width, bh = bloomCanvas.height;
+    if (bw < 2 || bh < 2) return;
+    try {
+      bctx.setTransform(1, 0, 0, 1, 0, 0);
+      bctx.globalCompositeOperation = 'source-over';
+      bctx.clearRect(0, 0, bw, bh);
+      bctx.filter = 'blur(' + BLOOM_BLUR + 'px)';
+      bctx.drawImage(canvas, 0, 0, bw, bh);
+      bctx.filter = 'none';
+      const pulse = feverActive ? 0.12 * (0.5 + 0.5 * Math.sin(frame * 0.25)) : 0;
+      const strength = Math.min(0.85, 0.2 + (feverActive ? 0.45 : 0) + pulse);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = strength;
+      ctx.drawImage(bloomCanvas, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    } catch (_) { bloomOK = false; }
+  }
+
   function draw() {
     ctx.save();
     // Camera zoom-punch (level up / impacts) — eases back each frame
@@ -3029,14 +3166,24 @@
     }
     ctx.restore();
 
-    // Combo "heat" — the hotter the streak, the more the arena glows in the
-    // level's signature colour. Skilful play literally lights up the screen.
+    // Bloom pass — reads the rendered scene, blurs, adds glow back. Game-feel
+    // cues below (flash / glitch) stay crisp because they're drawn after it.
+    applyBloom();
+
+    // Combo "heat" / OVERDRIVE wash — the screen glows with the streak. During
+    // OVERDRIVE it cycles through the full neon spectrum for a frenzied look.
     const heat = Math.min(combo, 20) / 20;
-    if (state === STATE.PLAY && heat > 0.25) {
+    if (state === STATE.PLAY && (feverActive || heat > 0.25)) {
       const pulse = 0.8 + 0.2 * Math.sin(frame * 0.2);
-      const hg = ctx.createRadialGradient(W / 2, GROUND - 160, H * 0.18, W / 2, GROUND - 160, H * 0.66);
-      hg.addColorStop(0, 'rgba(' + palette.sunRGB + ',0)');
-      hg.addColorStop(1, 'rgba(' + palette.sunRGB + ',' + (0.12 * heat * pulse).toFixed(3) + ')');
+      const hg = ctx.createRadialGradient(W / 2, GROUND - 160, H * 0.17, W / 2, GROUND - 160, H * 0.68);
+      if (feverActive) {
+        const hue = (frame * 6) % 360;
+        hg.addColorStop(0, 'hsla(' + hue + ',100%,60%,0)');
+        hg.addColorStop(1, 'hsla(' + hue + ',100%,60%,' + (0.17 * pulse).toFixed(3) + ')');
+      } else {
+        hg.addColorStop(0, 'rgba(' + palette.sunRGB + ',0)');
+        hg.addColorStop(1, 'rgba(' + palette.sunRGB + ',' + (0.12 * heat * pulse).toFixed(3) + ')');
+      }
       ctx.fillStyle = hg;
       ctx.fillRect(0, 0, W, H);
     }

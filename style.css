@@ -190,6 +190,64 @@ html, body {
   transition: transform 0.08s linear;
 }
 
+/* OVERDRIVE / Fever meter */
+.fever-bar {
+  position: relative;
+  height: 15px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(11, 16, 32, 0.55);
+  border: 1px solid rgba(255, 61, 240, 0.35);
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.25s ease;
+}
+.fever-bar.hidden { opacity: 0; }
+.fever-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-yellow) 50%, var(--neon-pink));
+  transition: transform 0.12s linear;
+}
+.fever-label {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 2.5px;
+  line-height: 15px;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  opacity: 0.75;
+}
+.fever-bar.charged {
+  border-color: var(--neon-yellow);
+  animation: feverCharged 0.6s ease-in-out infinite;
+}
+.fever-bar.active { border-color: #fff; animation: feverActiveGlow 0.4s linear infinite; }
+.fever-bar.active .fever-fill {
+  background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan), var(--neon-yellow), var(--neon-pink));
+  background-size: 200% 100%;
+  animation: feverFlow 0.6s linear infinite;
+}
+.fever-bar.active .fever-label { opacity: 1; }
+@keyframes feverCharged {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 225, 74, 0.5); }
+  50% { box-shadow: 0 0 22px rgba(255, 61, 240, 0.8); }
+}
+@keyframes feverActiveGlow {
+  0%, 100% { box-shadow: 0 0 16px rgba(25, 240, 255, 0.7); }
+  50% { box-shadow: 0 0 30px rgba(255, 61, 240, 0.95); }
+}
+@keyframes feverFlow {
+  from { background-position: 0% 0; }
+  to { background-position: -200% 0; }
+}
+
 .btn.revive {
   background: linear-gradient(135deg, #19f0ff, #3df0a0);
   margin-bottom: 8px;
@@ -850,7 +908,10 @@ html, body {
   .record-badge,
   .streak,
   .tut-hand,
-  .tutorial.show {
+  .tutorial.show,
+  .fever-bar.charged,
+  .fever-bar.active,
+  .fever-bar.active .fever-fill {
     animation: none !important;
   }
 }

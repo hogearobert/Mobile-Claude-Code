@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=49" />
+  <link rel="stylesheet" href="style.css?v=50" />
 </head>
 <body>
   <div id="app">
@@ -41,6 +41,10 @@
           <span id="comboText"></span>
           <div class="combo-meter"><div id="comboFill" class="combo-fill"></div></div>
         </div>
+      </div>
+      <div id="feverBar" class="fever-bar hidden">
+        <div id="feverFill" class="fever-fill"></div>
+        <span class="fever-label">OVERDRIVE</span>
       </div>
     </div>
     <div id="controls">
@@ -167,7 +171,7 @@
 
   </div>
 
-  <script src="game.js?v=49"></script>
+  <script src="game.js?v=50"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT
