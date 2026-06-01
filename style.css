@@ -840,3 +840,17 @@ html, body {
   opacity: 0.6;
   margin-bottom: 4px;
 }
+
+/* Accessibility: honour the OS "reduce motion" setting by stilling the
+   decorative looping animations (titles, orbs, badges). Gameplay canvas
+   motion is unaffected — only ambient UI flourishes are calmed. */
+@media (prefers-reduced-motion: reduce) {
+  .title,
+  .ad-orb,
+  .record-badge,
+  .streak,
+  .tut-hand,
+  .tutorial.show {
+    animation: none !important;
+  }
+}

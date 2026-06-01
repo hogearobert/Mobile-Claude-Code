@@ -64,6 +64,7 @@
         blip(f, 0.06, 'sine', 0.25);
         setTimeout(() => blip(f * 1.5, 0.1, 'sine', 0.22), 50);
       },
+      nearmiss() { blip(1320, 0.05, 'sine', 0.12, 1760); },
       hit() { noise(0.35, 0.5, 1200); blip(110, 0.4, 'sawtooth', 0.35, 55); },
       over() {
         blip(440, 0.18, 'sawtooth', 0.28);
@@ -637,7 +638,7 @@
     setpiece.spawnTimer--;
     if (setpiece.type === 'coinrush') {
       if (setpiece.spawnTimer <= 0) {
-        const baseY = GROUND - 70 - Math.random() * 130;
+        const baseY = GROUND - 70 - rnd() * 130;
         for (let i = 0; i < 3; i++) {
           coinsArr.push({ x: W + 30 + i * 30, y: baseY + Math.sin(i * 1.3) * 22, r: 14, picked: false, t: Math.random() * 6.28 });
         }
@@ -664,12 +665,12 @@
       }
     } else {
       if (setpiece.spawnTimer <= 0) {
-        if (Math.random() < 0.5) {
+        if (rnd() < 0.5) {
           obstacles.push({ type: 'overhang', x: W + 20, y: GROUND - 80, w: 46, h: 50 });
         } else {
           obstacles.push({ type: 'spike', x: W + 20, y: GROUND - 34, w: 36, h: 34 });
         }
-        setpiece.spawnTimer = 50 + Math.floor(Math.random() * 18);
+        setpiece.spawnTimer = 50 + Math.floor(rnd() * 18);
       }
     }
     if (setpiece.t >= setpiece.dur) {
@@ -745,26 +746,40 @@
 
   // ---------- Achievements ----------
   const ACHIEVEMENTS = [
-    { id: 'first_jump',    name: 'Primul salt',         desc: 'Sari pentru prima dată' },
-    { id: 'score_500',     name: 'Cinci sute',          desc: 'Atinge 500 scor' },
-    { id: 'score_2000',    name: 'Două mii',            desc: 'Atinge 2000 scor' },
-    { id: 'score_5000',    name: 'Veteran',             desc: 'Atinge 5000 scor' },
-    { id: 'combo_10',      name: 'Combo Maestru',       desc: 'Atinge 10 combo' },
-    { id: 'combo_20',      name: 'Imparabil',           desc: 'Atinge 20 combo' },
-    { id: 'magnet',        name: 'Atracție magnetică',  desc: 'Folosește un magnet' },
-    { id: 'shield_save',   name: 'Salvare scut',        desc: 'Scutul absoarbe o lovitură' },
-    { id: 'level_3',       name: 'Glacial',             desc: 'Ajunge la nivelul 4' },
-    { id: 'level_6',       name: 'Călătorul cosmic',    desc: 'Ajunge la nivelul 6' },
-    { id: 'coins_100',     name: 'Sută de stele',       desc: 'Adună 100 de stele în total' },
-    { id: 'revive',        name: 'A doua șansă',        desc: 'Folosește un revive' }
+    { id: 'first_jump',    name: 'Primul salt',         desc: 'Sari pentru prima dată',      reward: 5 },
+    { id: 'score_500',     name: 'Cinci sute',          desc: 'Atinge 500 scor',             reward: 25 },
+    { id: 'score_2000',    name: 'Două mii',            desc: 'Atinge 2000 scor',            reward: 75 },
+    { id: 'score_5000',    name: 'Veteran',             desc: 'Atinge 5000 scor',            reward: 200 },
+    { id: 'combo_10',      name: 'Combo Maestru',       desc: 'Atinge 10 combo',             reward: 30 },
+    { id: 'combo_20',      name: 'Imparabil',           desc: 'Atinge 20 combo',             reward: 80 },
+    { id: 'magnet',        name: 'Atracție magnetică',  desc: 'Folosește un magnet',         reward: 15 },
+    { id: 'shield_save',   name: 'Salvare scut',        desc: 'Scutul absoarbe o lovitură',  reward: 20 },
+    { id: 'level_3',       name: 'Glacial',             desc: 'Ajunge la nivelul 4',         reward: 40 },
+    { id: 'level_6',       name: 'Călătorul cosmic',    desc: 'Ajunge la nivelul 6',         reward: 100 },
+    { id: 'coins_100',     name: 'Sută de stele',       desc: 'Adună 100 de stele în total', reward: 25 },
+    { id: 'revive',        name: 'A doua șansă',        desc: 'Folosește un revive',         reward: 15 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
-  function hasAch(id) { return readLS(achKey(id), '0') === '1'; }
+  // In-memory unlock cache — avoids a synchronous localStorage read per trophy
+  // on every frame (the achievement checks run inside the hot update loop).
+  const achState = (function () {
+    const s = {};
+    for (const a of ACHIEVEMENTS) s[a.id] = readLS(achKey(a.id), '0') === '1';
+    return s;
+  })();
+  function hasAch(id) { return achState[id] === true; }
   function unlock(id) {
-    if (hasAch(id)) return;
+    if (achState[id]) return;
+    achState[id] = true;
     writeLS(achKey(id), '1');
     const a = ACHIEVEMENTS.find((x) => x.id === id);
-    if (a) showToast('🏆 ' + a.name, a.desc);
+    if (!a) return;
+    if (a.reward) {
+      totalCoins += a.reward;
+      writeLS(SK.coins, totalCoins);
+      coinsEl.textContent = totalCoins;
+    }
+    showToast('🏆 ' + a.name, a.desc + (a.reward ? '  ·  +' + a.reward + ' ★' : ''));
   }
   // ---------- Skins (cosmetic progression unlocked with stars) ----------
   const SKINS = [
@@ -786,7 +801,7 @@
   // ---------- Daily missions (3 active, reset daily) ----------
   const MISSION_TEMPLATES = [
     { id: 'score_x',    type: 'final', mk: () => ({ n: 200 + Math.floor(Math.random()*600), goal: 1 }),     label: (m) => 'Atinge ' + m.n + ' scor într-un run', reward: 50 },
-    { id: 'coins_x',    type: 'event', mk: () => ({ n: 20 + Math.floor(Math.random()*30), goal: 20 + Math.floor(Math.random()*30) }), label: (m) => 'Colectează ' + m.goal + ' stele',    reward: 35 },
+    { id: 'coins_x',    type: 'event', mk: () => ({ goal: 20 + Math.floor(Math.random()*30) }), label: (m) => 'Colectează ' + m.goal + ' stele',    reward: 35 },
     { id: 'combo_x',    type: 'final', mk: () => ({ n: 5 + Math.floor(Math.random()*10), goal: 1 }),       label: (m) => 'Atinge combo ' + m.n,           reward: 40 },
     { id: 'powerup_x',  type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*3) }),              label: (m) => 'Folosește ' + m.goal + ' power-ups', reward: 35 },
     { id: 'runs_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*5) }),              label: (m) => 'Joacă ' + m.goal + ' runs',     reward: 45 },
@@ -2050,6 +2065,25 @@
         }
       }
     }
+    // Near-miss reward — a barely-dodged hazard gives a small score bonus + juice.
+    // Fires once, the frame an obstacle's trailing edge clears the player's centre.
+    for (const o of obstacles) {
+      if (o.nearChecked) continue;
+      if (o.x + o.w < pcx) {
+        o.nearChecked = true;
+        if (frame <= invincibleUntil) continue;
+        const nx = o.x < pcx ? (pcx > o.x + o.w ? o.x + o.w : pcx) : o.x;
+        const ny = o.y < pcy ? (pcy > o.y + o.h ? o.y + o.h : pcy) : o.y;
+        const gdx = pcx - nx, gdy = pcy - ny;
+        const gap = Math.sqrt(gdx * gdx + gdy * gdy) - pcr;
+        if (gap > 0 && gap < 18) {
+          score += 10;
+          popText('APROAPE! +10', pcx, pcy - 46, '#19f0ff', 1.0);
+          addRing(pcx, pcy, 46, '120,230,255', 16);
+          audio.nearmiss();
+        }
+      }
+    }
     for (const c of coinsArr) {
       const dx = c.x - pcx;
       const dy = c.y - pcy;
@@ -2129,7 +2163,7 @@
     if (magnetFrames > 0 && !hasAch('magnet')) unlock('magnet');
     if (levelIdx >= 3 && !hasAch('level_3')) unlock('level_3');
     if (levelIdx >= 5 && !hasAch('level_6')) unlock('level_6');
-    if (totalCoins + runCoins >= 100) unlock('coins_100');
+    if (totalCoins + runCoins >= 100 && !hasAch('coins_100')) unlock('coins_100');
     if (frame % 4 === 0) scoreEl.textContent = Math.floor(score);
 
     if (shake > 0) shake *= 0.9;
@@ -2967,6 +3001,17 @@
   }
   player.y = GROUND - player.h;
   requestAnimationFrame(loop);
+
+  // Auto-pause when the app is backgrounded (tab switch, incoming call, lock).
+  // Stays paused on return so the player resumes deliberately instead of
+  // reappearing mid-obstacle and dying to a frame they never saw.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state === STATE.PLAY) {
+      state = STATE.PAUSED;
+      if (pauseBtn) pauseBtn.textContent = '▶';
+      music.pause();
+    }
+  });
 
   // Prevent context menu / pinch zoom
   document.addEventListener('gesturestart', (e) => e.preventDefault());
