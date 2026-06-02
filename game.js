@@ -861,6 +861,8 @@
     { id: 'spring_first',  name: 'Săritor',             desc: 'Folosește o catapultă',          reward: 25 },
     { id: 'nm_clutch',     name: 'Sânge Rece',          desc: '10 near-miss într-un run',       reward: 80 },
     { id: 'air_big',       name: 'Aerian',              desc: 'Bonus air-time +40 într-un salt', reward: 50 },
+    { id: 'slam_first',    name: 'Seismic',             desc: 'Distruge un obstacol cu Dive-Slam', reward: 30 },
+    { id: 'slam_triple',   name: 'Cutremur',            desc: 'Distruge 3 obstacole dintr-un Slam', reward: 90 },
     { id: 'score_10000',   name: 'Astronautul',         desc: 'Atinge 10.000 scor',             reward: 300 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
@@ -1448,6 +1450,7 @@
     slowmoFrames = 0;
     flashFrame = -1000;
     glitchFrame = -1000;
+    slamFlash = -1000;
     zoomPunch = 0;
     landBounce = 0;
     scoreEl.textContent = '0';
@@ -2082,6 +2085,61 @@
     return circleRectHit(cx, cy, cr, o.x, o.y, o.w, o.h);
   }
 
+  // ---------- Dive-Slam shockwave ----------
+  // Detonates on a committed dive-landing. Shatters nearby low obstacles, but
+  // never the one you're touching (that still kills you) — so it rewards a
+  // precise landing in the gap, not diving blindly onto hazards.
+  let slamFlash = -1000;
+  function doDiveSlam(power) {
+    const cx = player.x + player.w / 2;
+    const cyP = player.y + player.h / 2;
+    const pr = player.w / 2;
+    const R = Math.min(170, 92 + power * 3);
+    let destroyed = 0;
+    for (const o of obstacles) {
+      if (o.x < -100) continue;
+      // Only ground-level hazards are shatterable; flyers/overhangs are immune.
+      if (o.type !== 'spike' && o.type !== 'block') continue;
+      const ocx = o.x + o.w / 2;
+      if (Math.abs(ocx - cx) > R) continue;
+      // Spare anything the orb is currently overlapping — that one still kills.
+      if (obstacleHit(o, cx, cyP, pr + 2)) continue;
+      o.x = -9999; // remove from play
+      destroyed++;
+      const dcol = o.type === 'spike' ? '255,61,110' : '255,177,61';
+      for (let i = 0; i < 12; i++) {
+        const a = Math.random() * Math.PI - Math.PI; // upward fan
+        const v = 2 + Math.random() * 5;
+        pushParticle(ocx, o.y + o.h / 2, Math.cos(a) * v, Math.sin(a) * v - 1,
+          22 + Math.random() * 10, 'rgba(' + dcol + ',0.9)', Math.random() * 3 + 1.5);
+      }
+      addRing(ocx, GROUND - 10, 50, dcol, 18);
+    }
+    if (destroyed > 0) {
+      slamFlash = frame;
+      const gain = destroyed * 15 * feverScoreMult();
+      score += gain;
+      addFever(0.05 + destroyed * 0.04);
+      shake = Math.max(shake, 9 + destroyed * 2);
+      zoomPunch = Math.max(zoomPunch, 0.05);
+      addRing(cx, GROUND, 90 + destroyed * 30, '255,255,255', 26);
+      addRing(cx, GROUND, 60, '255,225,74', 20);
+      popText('SLAM! +' + gain + (destroyed > 1 ? '  ×' + destroyed : ''),
+        cx, GROUND - 70, '#ffe14a', 1.1 + destroyed * 0.12);
+      audio.hit();
+      audio.power();
+      if (navigator.vibrate) { try { navigator.vibrate([18, 24, 40]); } catch (_) {} }
+      // Sideways shock dust along the ground
+      for (let i = 0; i < 18; i++) {
+        const dir = i % 2 === 0 ? 1 : -1;
+        pushParticle(cx, GROUND - 3, dir * (3 + Math.random() * 6), -Math.random() * 2,
+          20, 'rgba(255,240,200,0.7)', Math.random() * 2.5 + 1);
+      }
+      if (!hasAch('slam_first')) unlock('slam_first');
+      if (destroyed >= 3 && !hasAch('slam_triple')) unlock('slam_triple');
+    }
+  }
+
   // ---------- Update ----------
   function update() {
     frame++;
@@ -2126,6 +2184,12 @@
         }
         addRing(player.x + player.w / 2, GROUND, 40, '255,255,255', 16);
         landBounce = Math.min(1, 0.35 + fallVy * 0.04); // squash impulse scales with impact
+        // DIVE-SLAM — landing a committed dive (swipe-down in air) detonates a
+        // ground shockwave that shatters nearby low obstacles (spike/block). It
+        // deliberately spares anything currently overlapping the orb, so you
+        // can't cheese a dive straight onto a spike — you must stick the landing
+        // in the gap and let the wave clear the threats around you.
+        if (player.sliding && fallVy >= 15) doDiveSlam(fallVy);
         // Air-time bonus — rewards committed long jumps (also covers double jumps,
         // since airframes counts continuous time off the floor)
         if (airframes > 35) {
@@ -2833,6 +2897,28 @@
     ctx.moveTo(0, GROUND);
     ctx.lineTo(W, GROUND);
     ctx.stroke();
+
+    // Dive-Slam ground shock — a bright horizon flare racing outward from impact
+    const slamAge = frame - slamFlash;
+    if (slamAge >= 0 && slamAge < 16) {
+      const k = 1 - slamAge / 16;
+      const fcx = player.x + player.w / 2;
+      const span = 120 + slamAge * 55;
+      const g = ctx.createLinearGradient(fcx - span, 0, fcx + span, 0);
+      g.addColorStop(0, 'rgba(255,225,74,0)');
+      g.addColorStop(0.5, 'rgba(255,240,180,' + (0.85 * k) + ')');
+      g.addColorStop(1, 'rgba(255,225,74,0)');
+      ctx.save();
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 3 + k * 5;
+      ctx.shadowColor = 'rgba(255,225,120,' + k + ')';
+      ctx.shadowBlur = 24 * k;
+      ctx.beginPath();
+      ctx.moveTo(fcx - span, GROUND);
+      ctx.lineTo(fcx + span, GROUND);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.strokeStyle = 'rgba(' + palette.accent + ', 0.18)';
     ctx.lineWidth = 1;
