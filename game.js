@@ -3326,6 +3326,39 @@
     }
     ctx.restore();
 
+    // MIDNIGHT biome — a soft pale moon rising in the upper-left sky, distinct
+    // from the synthwave sun on the right. Sells the calm-mysterious vibe.
+    if (palette.name === 'MIDNIGHT') {
+      const mcx = W * 0.22, mcy = GROUND - 360, mr = 38;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const halo = ctx.createRadialGradient(mcx, mcy, mr * 0.5, mcx, mcy, mr * 3.4);
+      halo.addColorStop(0, 'rgba(180,200,255,0.40)');
+      halo.addColorStop(0.5, 'rgba(140,170,255,0.14)');
+      halo.addColorStop(1, 'rgba(140,170,255,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(mcx - mr * 3.4, mcy - mr * 3.4, mr * 6.8, mr * 6.8);
+      ctx.restore();
+      // Moon disk with subtle terminator (right side slightly darker, like a waxing gibbous)
+      ctx.fillStyle = '#e8eeff';
+      ctx.beginPath();
+      ctx.arc(mcx, mcy, mr, 0, Math.PI * 2);
+      ctx.fill();
+      const term = ctx.createLinearGradient(mcx - mr, mcy, mcx + mr, mcy);
+      term.addColorStop(0, 'rgba(255,255,255,0)');
+      term.addColorStop(0.55, 'rgba(255,255,255,0)');
+      term.addColorStop(1, 'rgba(40,40,80,0.30)');
+      ctx.fillStyle = term;
+      ctx.beginPath();
+      ctx.arc(mcx, mcy, mr, 0, Math.PI * 2);
+      ctx.fill();
+      // A few craters — tiny dimples for character
+      ctx.fillStyle = 'rgba(140,150,180,0.35)';
+      ctx.beginPath(); ctx.arc(mcx - 9, mcy - 6, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(mcx + 4, mcy + 8, 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(mcx - 4, mcy + 14, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+
     // AURORA biome — sweeping ribbons of green/cyan light waving across the sky.
     // Three overlapping bands at different heights, each a sine-warped horizontal
     // strip with vertical falloff. Sells the biome name beyond just palette.
