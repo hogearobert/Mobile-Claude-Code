@@ -450,7 +450,10 @@
     loginStreak: NS + 'loginStreak',
     xp: NS + 'xp',
     skinUnlocked: NS + 'skinUnlocked',
-    ghostRun: NS + 'ghostRun' // sampled trajectory of the player's best run
+    ghostRun: NS + 'ghostRun', // sampled trajectory of the player's best run
+    lifeSlams: NS + 'lifeSlams',
+    lifePhases: NS + 'lifePhases',
+    bestCombo: NS + 'bestCombo'
   };
   function readLS(k, dflt) { try { return localStorage.getItem(k) ?? dflt; } catch (_) { return dflt; } }
   function writeLS(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
@@ -470,6 +473,9 @@
   let best = parseInt(readLS(SK.best, '0'), 10);
   let totalCoins = parseInt(readLS(SK.coins, '0'), 10);
   let totalRuns = parseInt(readLS(SK.runs, '0'), 10);
+  let lifeSlams = parseInt(readLS(SK.lifeSlams, '0'), 10);
+  let lifePhases = parseInt(readLS(SK.lifePhases, '0'), 10);
+  let bestCombo = parseInt(readLS(SK.bestCombo, '0'), 10);
   let totalXP = parseInt(readLS(SK.xp, '0'), 10) || 0;
   bestEl.textContent = best;
   coinsEl.textContent = totalCoins;
@@ -1354,6 +1360,10 @@
     const sr = document.getElementById('sRuns'); if (sr) sr.textContent = totalRuns;
     const ss = document.getElementById('sStars'); if (ss) ss.textContent = totalCoins;
     const sk = document.getElementById('sStreak'); if (sk) sk.textContent = parseInt(readLS(SK.loginStreak, '0'), 10) || 0;
+    const sCombo = document.getElementById('sCombo'); if (sCombo) sCombo.textContent = bestCombo;
+    const sSlam = document.getElementById('sSlam'); if (sSlam) sSlam.textContent = lifeSlams;
+    const sPhase = document.getElementById('sPhase'); if (sPhase) sPhase.textContent = lifePhases;
+    const sGhost = document.getElementById('sGhost'); if (sGhost) sGhost.textContent = ghostPlay.length ? Math.round(ghostPlay.length * GHOST_SAMPLE_FRAMES / 60) + 's' : '—';
     // Pilot rank banner — current rank + progress to the next
     {
       const cur = pilotRank;
@@ -2466,6 +2476,7 @@
           20, 'rgba(255,240,200,0.7)', Math.random() * 2.5 + 1);
       }
       missionEvent('slam', destroyed);
+      lifeSlams += destroyed; writeLS(SK.lifeSlams, lifeSlams);
       if (!hasAch('slam_first')) unlock('slam_first');
       if (destroyed >= 3 && !hasAch('slam_triple')) unlock('slam_triple');
     }
@@ -3034,6 +3045,7 @@
         addRing(c.x, c.y, 30, ringCol, 18);
         setComboUI(combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '');
         if (combo > runMaxCombo) runMaxCombo = combo;
+        if (combo > bestCombo) { bestCombo = combo; writeLS(SK.bestCombo, bestCombo); }
         addFever(0.035);
         if (combo === 5 || combo === 10 || combo === 15 || combo === 20 || combo === 30 || combo === 50) {
           // Escalating, named combo tiers — each milestone feels distinctly
@@ -3113,6 +3125,7 @@
           shake = Math.max(shake, 7);
           music.duck();
           missionEvent('phase');
+          lifePhases++; writeLS(SK.lifePhases, lifePhases);
           showTipOnce('phase', '👻 PHASE', 'Treci prin obstacole — fără frică!');
           if (!hasAch('phase_first')) unlock('phase_first');
         }

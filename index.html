@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=92" />
+  <link rel="stylesheet" href="style.css?v=93" />
 </head>
 <body>
   <div id="app">
@@ -168,6 +168,10 @@
           <div class="stat-box"><span class="stat-num" id="sRuns">0</span><span class="stat-lbl">Runs</span></div>
           <div class="stat-box"><span class="stat-num" id="sStars">0</span><span class="stat-lbl">Stele</span></div>
           <div class="stat-box"><span class="stat-num" id="sStreak">0</span><span class="stat-lbl">Streak</span></div>
+          <div class="stat-box"><span class="stat-num" id="sCombo">0</span><span class="stat-lbl">Combo Max</span></div>
+          <div class="stat-box"><span class="stat-num" id="sSlam">0</span><span class="stat-lbl">Slam-uri</span></div>
+          <div class="stat-box"><span class="stat-num" id="sPhase">0</span><span class="stat-lbl">Phase-uri</span></div>
+          <div class="stat-box"><span class="stat-num" id="sGhost">—</span><span class="stat-lbl">Fantomă</span></div>
         </div>
         <h3 class="sub-title">TROFEE</h3>
         <div id="achList" class="ach-list"></div>
@@ -193,7 +197,7 @@
 
   </div>
 
-  <script src="game.js?v=92"></script>
+  <script src="game.js?v=93"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT
