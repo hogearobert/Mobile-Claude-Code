@@ -4576,6 +4576,38 @@
       }
       ctx.restore();
     }
+
+    // Pause overlay — gentle dark scrim + branded title + resume hint, drawn
+    // straight on the canvas so we don't need a DOM layer. Keeps the playfield
+    // visible underneath so the player can plan their next move on resume.
+    if (state === STATE.PAUSED) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(7,9,26,0.62)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Stacked pulse halos behind the title text
+      const pulse = 0.85 + 0.15 * Math.sin(frame * 0.08);
+      const cy = H * 0.42;
+      const halo = ctx.createRadialGradient(W / 2, cy, 0, W / 2, cy, 220 * pulse);
+      halo.addColorStop(0, 'rgba(255,61,240,' + (0.22 * pulse) + ')');
+      halo.addColorStop(0.5, 'rgba(25,240,255,' + (0.10 * pulse) + ')');
+      halo.addColorStop(1, 'rgba(25,240,255,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(W / 2 - 240, cy - 240, 480, 480);
+      // Title
+      ctx.shadowColor = 'rgba(255,61,240,0.6)';
+      ctx.shadowBlur = 16;
+      ctx.font = 'bold 56px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('PAUZĂ', W / 2, cy);
+      // Subtitle hint
+      ctx.shadowBlur = 0;
+      ctx.font = '600 14px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.78)';
+      ctx.fillText('TAP PE  ▶  PENTRU A CONTINUA', W / 2, cy + 50);
+      ctx.restore();
+    }
   }
 
   function updateOver() {
