@@ -1756,6 +1756,7 @@
         dailyBest = score;
         writeLS(SK.dailyBest, dailyBest);
         newRecord = true;
+        if (typeof refreshDailyBtnLabel === 'function') refreshDailyBtnLabel();
       }
     } else {
       if (score > best) {
@@ -2061,6 +2062,14 @@
     dailyRng = makeRng('glitchrun-daily-' + todayStr());
     startGame();
   });
+  // Surface today's daily best directly on the button so players see their bar
+  function refreshDailyBtnLabel() {
+    if (!dailyBtn) return;
+    dailyBtn.innerHTML = dailyBest > 0
+      ? '⚡ DAILY CHALLENGE<span class="daily-best">Cel mai bun azi: ' + dailyBest + '</span>'
+      : '⚡ DAILY CHALLENGE';
+  }
+  refreshDailyBtnLabel();
 
   if (reviveBtn) reviveBtn.addEventListener('click', () => {
     audio.resume();

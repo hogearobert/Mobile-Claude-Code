@@ -1139,6 +1139,17 @@ html, body {
   padding-bottom: 11px;
   letter-spacing: 1.5px;
   margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.btn.secondary.daily .daily-best {
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  opacity: 0.85;
+  color: var(--neon-yellow);
+  text-transform: none;
 }
 
 .stats {
