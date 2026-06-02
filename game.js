@@ -2708,7 +2708,27 @@
           popText('+' + gain, c.x, c.y - 20, c.type === 'red' ? '#ff3df0' : '#19f0ff', 1.1);
           addRing(c.x, c.y, 44, c.type === 'red' ? '255,61,240' : '120,230,255', 24);
           if (c.type === 'blue') { missionEvent('gem_blue'); if (!hasAch('gem_blue')) unlock('gem_blue'); }
-          if (c.type === 'red' && !hasAch('gem_red')) unlock('gem_red');
+          if (c.type === 'red') {
+            // Red gem = 10× jackpot, very rare — give it a proper celebration
+            if (!hasAch('gem_red')) unlock('gem_red');
+            popText('JACKPOT! ×10', c.x, c.y - 52, '#ffe14a', 1.4);
+            flashFrame = frame;
+            glitchFrame = frame;
+            slowmoFrames = Math.max(slowmoFrames, 10);
+            zoomPunch = Math.max(zoomPunch, 0.07);
+            shake = Math.max(shake, 8);
+            addRing(c.x, c.y, 120, '255,61,240', 34);
+            addRing(c.x, c.y, 80, '255,225,74', 28);
+            addFever(0.18);
+            audio.power && audio.power();
+            if (navigator.vibrate) { try { navigator.vibrate([15, 30, 60]); } catch (_) {} }
+            for (let i = 0; i < 26; i++) {
+              const a = Math.random() * Math.PI * 2;
+              const v = Math.random() * 7 + 2;
+              pushParticle(c.x, c.y, Math.cos(a) * v, Math.sin(a) * v, 46,
+                ['#ff3df0', '#ffe14a', '#fff'][i % 3], Math.random() * 3 + 1.5);
+            }
+          }
         }
         const ringCol = c.type === 'red' ? '255,61,240' : c.type === 'blue' ? '120,230,255' : (feverActive ? '255,61,240' : '255,225,74');
         addRing(c.x, c.y, 30, ringCol, 18);
