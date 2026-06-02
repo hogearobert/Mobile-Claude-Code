@@ -111,6 +111,35 @@ html, body {
   box-shadow: 0 0 16px rgba(255, 225, 74, 0.2);
 }
 
+.badge.record { position: relative; padding-bottom: 7px; }
+.rec-prog {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+#recProgFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.12s linear;
+}
+.badge.record.close {
+  border-color: var(--neon-yellow);
+  box-shadow: 0 0 20px rgba(255, 225, 74, 0.55);
+  animation: recordClose 0.55s ease-in-out infinite;
+}
+@keyframes recordClose {
+  0%, 100% { box-shadow: 0 0 14px rgba(255, 225, 74, 0.45); }
+  50% { box-shadow: 0 0 28px rgba(255, 61, 240, 0.75); }
+}
+
 .badge.coins .label { font-size: 14px; opacity: 1; margin-bottom: 0; }
 
 #controls {
@@ -1080,7 +1109,8 @@ html, body {
   .fever-bar.charged,
   .fever-bar.active,
   .fever-bar.active .fever-fill,
-  .pw.sprint {
+  .pw.sprint,
+  .badge.record.close {
     animation: none !important;
   }
 }

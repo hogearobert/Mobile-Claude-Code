@@ -600,6 +600,7 @@
     audio.power();
     audio.levelup();
     if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20, 40, 70]); } catch (_) {} }
+    missionEvent('overdrive');
     if (!hasAch('overdrive')) unlock('overdrive');
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -915,7 +916,13 @@
     { id: 'powerup_x',  type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*3) }),              label: (m) => 'Folosește ' + m.goal + ' power-ups', reward: 35 },
     { id: 'runs_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*5) }),              label: (m) => 'Joacă ' + m.goal + ' runs',     reward: 45 },
     { id: 'mystery_x',  type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Deschide ' + m.goal + ' mystery box', reward: 60 },
-    { id: 'level_x',    type: 'final', mk: () => ({ n: 2 + Math.floor(Math.random()*3), goal: 1 }),         label: (m) => 'Ajunge la nivelul ' + (m.n + 1), reward: 55 }
+    { id: 'level_x',    type: 'final', mk: () => ({ n: 2 + Math.floor(Math.random()*3), goal: 1 }),         label: (m) => 'Ajunge la nivelul ' + (m.n + 1), reward: 55 },
+    // Expansion — five new mission shapes for more variety in the daily rotation
+    { id: 'spring_x',   type: 'event', mk: () => ({ goal: 2 + Math.floor(Math.random()*3) }),              label: (m) => 'Folosește ' + m.goal + ' catapulte', reward: 40 },
+    { id: 'gem_blue_x', type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Colectează ' + m.goal + ' cristale albastre', reward: 55 },
+    { id: 'sprint_x',   type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Folosește ' + m.goal + ' Sprint', reward: 40 },
+    { id: 'overdrive_x', type: 'event', mk: () => ({ goal: 1 }),                                            label: () => 'Declanșează OVERDRIVE', reward: 60 },
+    { id: 'near_miss_x', type: 'event', mk: () => ({ goal: 5 + Math.floor(Math.random()*5) }),             label: (m) => 'Fă ' + m.goal + ' near-miss', reward: 50 }
   ];
   const MK = { current: SK.skinUnlocked + '.current' };
 
@@ -961,6 +968,11 @@
       else if (m.id === 'powerup_x' && type === 'powerup') inc = 1;
       else if (m.id === 'runs_x' && type === 'gameover') inc = 1;
       else if (m.id === 'mystery_x' && type === 'mystery') inc = 1;
+      else if (m.id === 'spring_x' && type === 'spring') inc = 1;
+      else if (m.id === 'gem_blue_x' && type === 'gem_blue') inc = 1;
+      else if (m.id === 'sprint_x' && type === 'sprint') inc = 1;
+      else if (m.id === 'near_miss_x' && type === 'near_miss') inc = 1;
+      else if (m.id === 'overdrive_x' && type === 'overdrive') inc = 1;
       else if (m.id === 'score_x' && type === 'gameover' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'combo_x' && type === 'combo' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'level_x' && type === 'level' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
@@ -1431,6 +1443,7 @@
     feverFrames = 0;
     updateFeverUI();
     updatePowerHud();
+    updateRecordProgress();
     texts = [];
     slowmoFrames = 0;
     flashFrame = -1000;
@@ -1722,6 +1735,19 @@
   const pwMagnetEl = document.getElementById('pwMagnet');
   const pwShieldEl = document.getElementById('pwShield');
   const pwSprintEl = document.getElementById('pwSprint');
+  const recordBadgeEl = bestEl ? bestEl.closest('.badge') : null;
+  const recProgFillEl = document.getElementById('recProgFill');
+  function updateRecordProgress() {
+    if (!recProgFillEl || !recordBadgeEl) return;
+    if (dailyMode || best <= 0 || state !== STATE.PLAY) {
+      recProgFillEl.style.transform = 'scaleX(0)';
+      recordBadgeEl.classList.remove('close');
+      return;
+    }
+    const ratio = Math.min(1, score / best);
+    recProgFillEl.style.transform = 'scaleX(' + ratio + ')';
+    recordBadgeEl.classList.toggle('close', ratio > 0.85 && ratio < 1);
+  }
   function updatePowerHud() {
     if (pwMagnetEl) {
       const on = magnetFrames > 0;
@@ -2147,6 +2173,7 @@
           addRing(s.x + s.w / 2, GROUND, 70, '255,255,255', 20);
           popText('LAUNCH!', s.x + s.w / 2, GROUND - 90, '#fff', 1.1);
           if (!hasAch('spring_first')) unlock('spring_first');
+          missionEvent('spring');
           for (let i = 0; i < 14; i++) {
             const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
             const v = Math.random() * 5 + 2;
@@ -2416,6 +2443,7 @@
           shake = Math.max(shake, 6);
           addFever(0.12 + nmFeverBonus);
           runNearMisses++;
+          missionEvent('near_miss');
           if (runNearMisses >= 10 && !hasAch('nm_clutch')) unlock('nm_clutch');
         } else if (gap > 0 && gap < 18) {
           const gain = (10 + nmSkinBonus) * feverScoreMult();
@@ -2425,6 +2453,7 @@
           audio.nearmiss();
           addFever(0.05 + nmFeverBonus);
           runNearMisses++;
+          missionEvent('near_miss');
           if (runNearMisses >= 10 && !hasAch('nm_clutch')) unlock('nm_clutch');
         }
       }
@@ -2447,7 +2476,7 @@
         if (gm > 1) {
           popText('+' + gain, c.x, c.y - 20, c.type === 'red' ? '#ff3df0' : '#19f0ff', 1.1);
           addRing(c.x, c.y, 44, c.type === 'red' ? '255,61,240' : '120,230,255', 24);
-          if (c.type === 'blue' && !hasAch('gem_blue')) unlock('gem_blue');
+          if (c.type === 'blue') { missionEvent('gem_blue'); if (!hasAch('gem_blue')) unlock('gem_blue'); }
           if (c.type === 'red' && !hasAch('gem_red')) unlock('gem_red');
         }
         const ringCol = c.type === 'red' ? '255,61,240' : c.type === 'blue' ? '120,230,255' : (feverActive ? '255,61,240' : '255,225,74');
@@ -2503,6 +2532,7 @@
           zoomPunch = Math.max(zoomPunch, 0.06);
           shake = Math.max(shake, 5);
           music.duck();
+          missionEvent('sprint');
           if (!hasAch('sprint_first')) unlock('sprint_first');
         }
         audio.power && audio.power();
@@ -2521,7 +2551,7 @@
       magnetFrames = Math.max(magnetFrames, 2);
       if (--feverFrames <= 0) endFever();
     }
-    if (frame % 2 === 0) { updateFeverUI(); updatePowerHud(); }
+    if (frame % 2 === 0) { updateFeverUI(); updatePowerHud(); updateRecordProgress(); }
 
     // dist drives all pacing (level / speed / spawns) — steady, coin-independent.
     dist += 1;
