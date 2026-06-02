@@ -1015,6 +1015,9 @@
   function showScreen(name) {
     // Hide ALL overlays — main menu, shop, missions, stats, game over, ad
     document.querySelectorAll('.overlay').forEach((o) => o.classList.remove('show'));
+    // Return to attract mode so the synthwave scene breathes behind every menu
+    // screen instead of freezing on the game-over frame (never overrides a run).
+    if (state !== STATE.PLAY) state = STATE.MENU;
     if (name === 'home') {
       document.getElementById('overlay').classList.add('show');
     } else if (name === 'shop') {
