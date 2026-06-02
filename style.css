@@ -1020,7 +1020,15 @@ html, body {
   background-clip: text;
   color: transparent;
   text-shadow: 0 0 24px rgba(255, 61, 240, 0.4);
-  animation: pulse 2.4s ease-in-out infinite;
+  animation: pulse 2.4s ease-in-out infinite, titleGlitch 5.5s steps(1) infinite;
+}
+/* Occasional digital glitch — brief RGB-split + jitter, on-brand for GLITCH RUN */
+@keyframes titleGlitch {
+  0%, 88%, 100% { transform: translate(0, 0); text-shadow: 0 0 24px rgba(255, 61, 240, 0.4); }
+  89% { transform: translate(-2px, 1px); text-shadow: 2px 0 rgba(25,240,255,0.8), -2px 0 rgba(255,61,240,0.8), 0 0 24px rgba(255,61,240,0.4); }
+  90% { transform: translate(2px, -1px); text-shadow: -3px 0 rgba(25,240,255,0.8), 3px 0 rgba(255,61,240,0.8), 0 0 24px rgba(255,61,240,0.4); }
+  91% { transform: translate(-1px, 0); text-shadow: 2px 0 rgba(25,240,255,0.7), -2px 0 rgba(255,61,240,0.7), 0 0 24px rgba(255,61,240,0.4); }
+  92% { transform: translate(0, 0); text-shadow: 0 0 24px rgba(255, 61, 240, 0.4); }
 }
 
 .title.small { font-size: 40px; letter-spacing: 3px; }
