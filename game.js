@@ -972,7 +972,9 @@
     { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, animated: true, core:['#fff','#ffd0ff','#ff3df0','#5a0a8c'], halo:['rgba(255,61,240,0.6)','rgba(180,40,200,0.22)'], ring:'rgba(255,200,255,0.85)', trail:'255,140,255', perk:{ type:'feverNm', val:0.04, label:'+OVERDRIVE per near-miss' } },
     { id: 'nebula',  name: 'NEBULA',  cost: 2200, locked: true, core:['#fff','#e8d8ff','#a874ff','#3a1a7a'], halo:['rgba(180,120,255,0.55)','rgba(120,80,220,0.22)'], ring:'rgba(220,180,255,0.8)', trail:'180,130,255', perk:{ type:'sprint',  val:2,    label:'+2s la Sprint' } },
     { id: 'aurora',  name: 'AURORA',  cost: 4500, locked: true, core:['#fff','#ccffe8','#3dffd0','#0a6e5a'], halo:['rgba(100,255,210,0.6)','rgba(60,200,255,0.22)'], ring:'rgba(140,255,220,0.8)', trail:'100,255,210', perk:{ type:'coin',    val:1,    label:'+1 stea / coin' } },
-    { id: 'titan',   name: 'TITAN',   cost: 6000, locked: true, core:['#fff','#ffe0b0','#ff8a1e','#7a3200'], halo:['rgba(255,140,40,0.6)','rgba(255,80,20,0.25)'],   ring:'rgba(255,170,90,0.8)',  trail:'255,150,60',  perk:{ type:'slam',    val:0.7,  label:'+70% rază Dive-Slam' } }
+    { id: 'titan',   name: 'TITAN',   cost: 6000, locked: true, core:['#fff','#ffe0b0','#ff8a1e','#7a3200'], halo:['rgba(255,140,40,0.6)','rgba(255,80,20,0.25)'],   ring:'rgba(255,170,90,0.8)',  trail:'255,150,60',  perk:{ type:'slam',    val:0.7,  label:'+70% rază Dive-Slam' } },
+    // Rank-gated reward skin — earned by reaching pilot rank, not bought
+    { id: 'void',    name: 'VOID',    cost: 0, locked: true, rankReq: 5, animated: true, core:['#fff','#d8c8ff','#7a3dff','#1a0640'], halo:['rgba(140,80,255,0.6)','rgba(80,40,200,0.25)'], ring:'rgba(180,120,255,0.9)', trail:'160,110,255', perk:{ type:'gem', val:1.0, label:'+100% șansă gem' } }
   ];
   function perkVal(type) {
     const sk = currentSkin();
@@ -980,6 +982,8 @@
   }
   function ownedSkin(id) {
     if (id === 'cyan') return true;
+    const sk = SKINS.find((s) => s.id === id);
+    if (sk && sk.rankReq != null && pilotRank >= sk.rankReq) return true; // earned via pilot rank
     return readLS(SK.skinUnlocked + '.' + id, '0') === '1';
   }
   let currentSkinId = readLS(SK.skinUnlocked + '.current', 'cyan');
@@ -1126,9 +1130,10 @@
       nameEl.className = 'skin-name';
       nameEl.textContent = s.name;
 
+      const rankLocked = !owned && s.rankReq != null;
       const costEl = document.createElement('div');
-      costEl.className = 'skin-cost ' + (equipped ? 'equipped' : owned ? 'owned' : s.adOnly ? 'ad' : '');
-      costEl.textContent = equipped ? 'ECHIPAT' : owned ? 'TAP PT ECHIPARE' : s.adOnly ? 'GRATUIT VIA AD' : (s.cost + ' ★');
+      costEl.className = 'skin-cost ' + (equipped ? 'equipped' : owned ? 'owned' : rankLocked ? 'rank' : s.adOnly ? 'ad' : '');
+      costEl.textContent = equipped ? 'ECHIPAT' : owned ? 'TAP PT ECHIPARE' : rankLocked ? ('RANG ' + s.rankReq) : s.adOnly ? 'GRATUIT VIA AD' : (s.cost + ' ★');
 
       div.appendChild(previewEl);
       div.appendChild(nameEl);
@@ -1146,6 +1151,9 @@
           writeLS(MK.current, s.id);
           audio.coin();
           renderShop();
+        } else if (s.rankReq != null) {
+          // Earned by pilot rank, not purchasable
+          showToast('🔒 Blocat · RANG ' + s.rankReq, 'Ajungi la nivelul ' + s.rankReq + ' de pilot');
         } else if (s.adOnly) {
           // Trigger rewarded ad stub for free skin
           showRewardedAd(() => {

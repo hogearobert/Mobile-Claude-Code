@@ -706,6 +706,8 @@ html, body {
 .skin-cost.owned { color: var(--neon-cyan); }
 .skin-cost.equipped { color: var(--neon-yellow); }
 .skin-cost.ad::before { content: '▶ '; }
+.skin-cost.rank { color: #b478ff; }
+.skin-cost.rank::before { content: '🔒 '; }
 .skin-perk {
   font-size: 9px;
   font-weight: 700;
