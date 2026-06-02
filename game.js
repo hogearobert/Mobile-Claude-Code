@@ -3781,8 +3781,31 @@
     ctx.restore();
   }
 
+  // Rounded-rect path helper (own impl — broader mobile support than ctx.roundRect)
+  function roundRectPath(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
   function drawSetpieceBoss() {
-    if (!setpiece || setpiece.type !== 'tornado') return;
+    if (!setpiece) return;
+    // LOW-G ambience — a soft moon-blue wash from above so the float zone reads
+    if (setpiece.type === 'lowg') {
+      const pulse = 0.08 + 0.03 * Math.sin(frame * 0.06);
+      const g = ctx.createLinearGradient(0, 0, 0, GROUND);
+      g.addColorStop(0, 'rgba(140,210,255,' + pulse.toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(140,210,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, GROUND);
+      return;
+    }
+    if (setpiece.type !== 'tornado') return;
     const v = setpiece.vortex;
     if (v < 0.01) return;
     const bx = W * 0.74;
@@ -3821,6 +3844,31 @@
       ctx.fill();
     }
     ctx.restore();
+    // Boss HP bar — "health" drains with the set-piece timer, giving the fight
+    // a clear beginning/middle/end and a sense of wearing the boss down.
+    if (v > 0.4) {
+      const hp = Math.max(0, 1 - setpiece.t / setpiece.dur);
+      const bw = Math.min(260, W * 0.6), bh = 9;
+      const bxL = (W - bw) / 2, byT = 54;
+      ctx.save();
+      ctx.fillStyle = 'rgba(11,16,32,0.7)';
+      ctx.strokeStyle = 'rgba(180,120,255,0.6)';
+      ctx.lineWidth = 1.5;
+      roundRectPath(bxL - 2, byT - 2, bw + 4, bh + 4, 6);
+      ctx.fill(); ctx.stroke();
+      const fg = ctx.createLinearGradient(bxL, 0, bxL + bw, 0);
+      fg.addColorStop(0, '#b478ff');
+      fg.addColorStop(1, '#ff3df0');
+      ctx.fillStyle = fg;
+      roundRectPath(bxL, byT, bw * hp, bh, 5);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('🌪 TORNADO', W / 2, byT - 4);
+      ctx.restore();
+    }
   }
 
   function drawCoins() {
