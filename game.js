@@ -578,8 +578,13 @@
   let ghostHead = 0;   // current playback index for ghostPlay
   let ghostPassed = false; // we've passed the ghost's end this run (one-shot pop)
   function loadGhost() {
-    try { const raw = readLS(SK.ghostRun, null); ghostPlay = raw ? JSON.parse(raw) : []; }
-    catch (_) { ghostPlay = []; }
+    try {
+      const raw = readLS(SK.ghostRun, null);
+      const parsed = raw ? JSON.parse(raw) : [];
+      // Defensive: refuse anything that isn't an array of numbers — a tampered
+      // or corrupted entry would otherwise leak NaN/undefined into rendering.
+      ghostPlay = Array.isArray(parsed) ? parsed.filter((n) => typeof n === 'number' && isFinite(n)) : [];
+    } catch (_) { ghostPlay = []; }
   }
   loadGhost();
   let runCoins = 0;
@@ -2044,12 +2049,15 @@
   if (shareBtn) shareBtn.addEventListener('click', async () => {
     audio.resume();
     const txt = '🌌 Am făcut ' + score + ' puncte în Glitch Run! Poți să mă bați?';
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Glitch Run', text: txt, url: location.href });
-        return;
-      }
-    } catch (_) { /* user cancelled, fall through */ }
+    // Prefer the native share sheet when available. Treat ANY resolution of
+    // navigator.share (success or user-cancel via AbortError) as terminal —
+    // we must NOT fall through to clipboard, or cancelling the dialog will
+    // silently overwrite the clipboard and falsely toast 'Copiat!'.
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Glitch Run', text: txt, url: location.href }); }
+      catch (_) { /* user cancelled or share failed — respect it, do nothing */ }
+      return;
+    }
     try {
       await navigator.clipboard.writeText(txt + ' ' + location.href);
       showToast('Copiat!', 'Scorul tău e în clipboard — lipește unde vrei');
