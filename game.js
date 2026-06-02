@@ -570,6 +570,8 @@
   let magnetFrames = 0;
   let shieldActive = false;
   let sprintFrames = 0;
+  let phaseFrames = 0;       // PHASE power-up — ghost through obstacles, shatter them
+  let phaseStreak = 0;       // obstacles vaporised in the current phase window
   function sprintMult() { return sprintFrames > 0 ? 1.5 : 1; }
   let shieldFlashFrame = -1000;
   let invincibleUntil = -1;
@@ -869,6 +871,8 @@
     { id: 'air_big',       name: 'Aerian',              desc: 'Bonus air-time +40 într-un salt', reward: 50 },
     { id: 'slam_first',    name: 'Seismic',             desc: 'Distruge un obstacol cu Dive-Slam', reward: 30 },
     { id: 'slam_triple',   name: 'Cutremur',            desc: 'Distruge 3 obstacole dintr-un Slam', reward: 90 },
+    { id: 'phase_first',   name: 'Fantomă',             desc: 'Activează PHASE',                reward: 25 },
+    { id: 'phase_streak',  name: 'Intangibil',          desc: 'Treci prin 5 obstacole într-un PHASE', reward: 90 },
     { id: 'score_10000',   name: 'Astronautul',         desc: 'Atinge 10.000 scor',             reward: 300 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
@@ -931,7 +935,9 @@
     { id: 'gem_blue_x', type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Colectează ' + m.goal + ' cristale albastre', reward: 55 },
     { id: 'sprint_x',   type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Folosește ' + m.goal + ' Sprint', reward: 40 },
     { id: 'overdrive_x', type: 'event', mk: () => ({ goal: 1 }),                                            label: () => 'Declanșează OVERDRIVE', reward: 60 },
-    { id: 'near_miss_x', type: 'event', mk: () => ({ goal: 5 + Math.floor(Math.random()*5) }),             label: (m) => 'Fă ' + m.goal + ' near-miss', reward: 50 }
+    { id: 'near_miss_x', type: 'event', mk: () => ({ goal: 5 + Math.floor(Math.random()*5) }),             label: (m) => 'Fă ' + m.goal + ' near-miss', reward: 50 },
+    { id: 'phase_x',    type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează PHASE de ' + m.goal + ' ori', reward: 55 },
+    { id: 'slam_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*4) }),              label: (m) => 'Distruge ' + m.goal + ' obstacole cu Dive-Slam', reward: 50 }
   ];
   const MK = { current: SK.skinUnlocked + '.current' };
 
@@ -982,6 +988,8 @@
       else if (m.id === 'sprint_x' && type === 'sprint') inc = 1;
       else if (m.id === 'near_miss_x' && type === 'near_miss') inc = 1;
       else if (m.id === 'overdrive_x' && type === 'overdrive') inc = 1;
+      else if (m.id === 'phase_x' && type === 'phase') inc = 1;
+      else if (m.id === 'slam_x' && type === 'slam') inc = value || 1;
       else if (m.id === 'score_x' && type === 'gameover' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'combo_x' && type === 'combo' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'level_x' && type === 'level' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
@@ -1509,6 +1517,8 @@
     springs = [];
     // COSMIC skin: kick off the run with a free magnet window
     magnetFrames = 60 * perkVal('magnet');
+    phaseFrames = 0;
+    phaseStreak = 0;
     shieldActive = false;
     sprintFrames = 0;
     shieldFlashFrame = -1000;
@@ -1812,6 +1822,7 @@
   const pwMagnetEl = document.getElementById('pwMagnet');
   const pwShieldEl = document.getElementById('pwShield');
   const pwSprintEl = document.getElementById('pwSprint');
+  const pwPhaseEl = document.getElementById('pwPhase');
   const recordBadgeEl = bestEl ? bestEl.closest('.badge') : null;
   const recProgFillEl = document.getElementById('recProgFill');
   function updateRecordProgress() {
@@ -1841,6 +1852,14 @@
       if (on) {
         const f = pwSprintEl.querySelector('.pf');
         if (f) f.style.transform = 'scaleX(' + Math.min(1, sprintFrames / (60 * 5)) + ')';
+      }
+    }
+    if (pwPhaseEl) {
+      const on = phaseFrames > 0;
+      pwPhaseEl.classList.toggle('hidden', !on);
+      if (on) {
+        const f = pwPhaseEl.querySelector('.pf');
+        if (f) f.style.transform = 'scaleX(' + Math.min(1, phaseFrames / (60 * 5)) + ')';
       }
     }
   }
@@ -2070,8 +2089,9 @@
   }
 
   function spawnPowerup() {
-    const types = ['magnet', 'shield', 'sprint'];
-    const t = types[Math.floor(rnd() * types.length)];
+    // Weighted pool — PHASE (ghost mode) is the rare, exciting drop.
+    const pool = ['magnet', 'magnet', 'shield', 'shield', 'sprint', 'sprint', 'phase'];
+    const t = pool[Math.floor(rnd() * pool.length)];
     const p = {
       type: t,
       x: W + 30,
@@ -2211,6 +2231,7 @@
         pushParticle(cx, GROUND - 3, dir * (3 + Math.random() * 6), -Math.random() * 2,
           20, 'rgba(255,240,200,0.7)', Math.random() * 2.5 + 1);
       }
+      missionEvent('slam', destroyed);
       if (!hasAch('slam_first')) unlock('slam_first');
       if (destroyed >= 3 && !hasAch('slam_triple')) unlock('slam_triple');
     }
@@ -2448,6 +2469,15 @@
     // Decay magnet
     if (magnetFrames > 0) magnetFrames--;
     if (sprintFrames > 0) sprintFrames--;
+    if (phaseFrames > 0) {
+      phaseFrames--;
+      if (phaseFrames === 0) {
+        // Phase collapse — brief grace so you don't reappear inside an obstacle
+        invincibleUntil = Math.max(invincibleUntil, frame + 18);
+        addRing(player.x + player.w / 2, player.y + player.h / 2, 80, '180,130,255', 22);
+        if (phaseStreak >= 3) popText('PHASE ×' + phaseStreak, player.x + player.w / 2, player.y - 30, '#c8a8ff', 1.3);
+      }
+    }
     // Combo decay + live meter fill (drains as the window runs out)
     if (combo > 0) {
       if (frame - lastCoinFrame > comboWindow()) {
@@ -2531,6 +2561,33 @@
       p.life--;
     });
     particles = particles.filter((p) => p.life > 0);
+
+    // PHASE — ghost mode: vaporise any obstacle the orb passes through for a
+    // streak of bonus score, instead of dying. Runs while the power is active.
+    if (phaseFrames > 0) {
+      for (const o of obstacles) {
+        if (o.x < -100 || o.phased) continue;
+        if (obstacleHit(o, pcx, pcy, pcr + 6)) {
+          o.phased = true;
+          o.x = -9999;
+          phaseStreak++;
+          const gain = 20 * feverScoreMult();
+          score += gain;
+          addFever(0.03);
+          shake = Math.max(shake, 5);
+          const col = o.type === 'spike' ? '255,61,110' : o.type === 'flying' ? '255,90,200' : '180,130,255';
+          addRing(pcx, pcy, 56, '200,150,255', 16);
+          popText('+' + gain, pcx + 20, pcy - 30, '#c8a8ff', 0.95);
+          for (let i = 0; i < 14; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const v = 2 + Math.random() * 5;
+            pushParticle(pcx, pcy, Math.cos(a) * v, Math.sin(a) * v, 26,
+              'rgba(' + col + ',0.9)', Math.random() * 3 + 1.5);
+          }
+          if (phaseStreak === 5 && !hasAch('phase_streak')) unlock('phase_streak');
+        }
+      }
+    }
 
     // Collisions — player is a circle, each obstacle tested by its true shape
     if (frame > invincibleUntil) {
@@ -2674,10 +2731,26 @@
           music.duck();
           missionEvent('sprint');
           if (!hasAch('sprint_first')) unlock('sprint_first');
+        } else if (p.type === 'phase') {
+          const dur = 60 * 5;
+          phaseFrames = Math.max(phaseFrames, dur);
+          phaseStreak = 0;
+          invincibleUntil = Math.max(invincibleUntil, frame + dur);
+          magnetFrames = Math.max(magnetFrames, dur); // sweep up the spoils mid-phase
+          popText('⚡ PHASE ⚡', p.x, p.y - 24, '#c8a8ff', 1.5);
+          addRing(p.x, p.y, 90, '180,130,255', 32);
+          addRing(p.x, p.y, 60, '255,255,255', 26);
+          flashFrame = frame;
+          glitchFrame = frame;
+          zoomPunch = Math.max(zoomPunch, 0.08);
+          shake = Math.max(shake, 7);
+          music.duck();
+          missionEvent('phase');
+          if (!hasAch('phase_first')) unlock('phase_first');
         }
         audio.power && audio.power();
         missionEvent('powerup');
-        const pcol = p.type === 'magnet' ? '#ffe14a' : p.type === 'shield' ? '#19f0ff' : '#fff';
+        const pcol = p.type === 'magnet' ? '#ffe14a' : p.type === 'shield' ? '#19f0ff' : p.type === 'phase' ? '#c8a8ff' : '#fff';
         for (let i = 0; i < 16; i++) {
           const a = Math.random() * Math.PI * 2;
           const v = Math.random() * 4 + 2;
@@ -3052,6 +3125,36 @@
       ctx.fillRect(t.x - r, t.y - r, r * 2, r * 2);
     }
 
+    // PHASE ghost aura — translucent purple echoes streaming behind the orb,
+    // plus a pulsing halo. Reads instantly as "intangible" without touching the
+    // core orb render. Dims out over the final half-second as the power expires.
+    if (phaseFrames > 0) {
+      const gcx = player.x + player.w / 2;
+      const gcy = player.y + player.h / 2;
+      const fade = Math.min(1, phaseFrames / 30);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i <= 4; i++) {
+        const ex = gcx - i * (6 + speed * 0.6);
+        const a = 0.22 * fade * (1 - i / 5);
+        const r = 22 + i * 2;
+        const eg = ctx.createRadialGradient(ex, gcy, 0, ex, gcy, r);
+        eg.addColorStop(0, 'rgba(200,150,255,' + a + ')');
+        eg.addColorStop(1, 'rgba(200,150,255,0)');
+        ctx.fillStyle = eg;
+        ctx.beginPath();
+        ctx.arc(ex, gcy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const pr = 30 + Math.sin(frame * 0.4) * 4;
+      ctx.strokeStyle = 'rgba(210,170,255,' + (0.55 * fade) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(gcx, gcy, pr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     const cx = player.x + player.w / 2;
     const sT = player.slideT;
     // Subtle vertical bob in the roll cycle — small (~1px) but reads as life.
@@ -3309,6 +3412,7 @@
       const g = ctx.createRadialGradient(px, py, 0, px, py, p.r * 1.8);
       const col = p.type === 'magnet' ? '255, 225, 74'
                 : p.type === 'shield' ? '25, 240, 255'
+                : p.type === 'phase'  ? '200, 168, 255'
                 : '255, 255, 255';
       g.addColorStop(0, 'rgba(' + col + ', 0.6)');
       g.addColorStop(1, 'rgba(' + col + ', 0)');
@@ -3322,7 +3426,7 @@
       ctx.font = 'bold 22px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(p.type === 'magnet' ? '🧲' : p.type === 'shield' ? '🛡' : '⚡', px, py + 2);
+      ctx.fillText(p.type === 'magnet' ? '🧲' : p.type === 'shield' ? '🛡' : p.type === 'phase' ? '👻' : '⚡', px, py + 2);
     }
   }
 
@@ -3736,7 +3840,7 @@
       const a = 0.4 * Math.max(0, 1 - (GROUND - p.y) / FADE);
       if (a < 0.03) continue;
       ctx.globalAlpha = a;
-      ctx.fillStyle = p.type === 'magnet' ? 'rgba(255,225,74,1)' : p.type === 'shield' ? 'rgba(25,240,255,1)' : 'rgba(255,255,255,1)';
+      ctx.fillStyle = p.type === 'magnet' ? 'rgba(255,225,74,1)' : p.type === 'shield' ? 'rgba(25,240,255,1)' : p.type === 'phase' ? 'rgba(200,168,255,1)' : 'rgba(255,255,255,1)';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();

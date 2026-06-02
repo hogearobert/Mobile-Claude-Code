@@ -269,6 +269,16 @@ html, body {
   0%, 100% { box-shadow: 0 0 12px rgba(255, 255, 255, 0.4); }
   50% { box-shadow: 0 0 22px rgba(255, 61, 240, 0.7); }
 }
+.pw.phase {
+  border-color: rgba(200, 168, 255, 0.7);
+  box-shadow: 0 0 12px rgba(180, 130, 255, 0.45);
+  animation: phasePulse 0.7s ease-in-out infinite;
+}
+.pw.phase .pf { background: linear-gradient(90deg, #fff, #b478ff); }
+@keyframes phasePulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(180, 130, 255, 0.45); opacity: 0.85; }
+  50% { box-shadow: 0 0 24px rgba(200, 150, 255, 0.85); opacity: 1; }
+}
 
 /* OVERDRIVE / Fever meter */
 .fever-bar {
@@ -1110,6 +1120,7 @@ html, body {
   .fever-bar.active,
   .fever-bar.active .fever-fill,
   .pw.sprint,
+  .pw.phase,
   .badge.record.close {
     animation: none !important;
   }
