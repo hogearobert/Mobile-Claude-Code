@@ -647,6 +647,7 @@
   let slowmoFrames = 0;     // frames of remaining slow-mo
   let flashFrame = -1000;   // last frame a white flash was triggered
   let glitchFrame = -1000;  // last frame a chromatic glitch was triggered
+  let levelWarpFrame = -1000; // last frame a biome-transition warp was triggered
   let zoomPunch = 0;        // camera zoom-punch amount, decays to 0
   let landBounce = 0;       // landing squash impulse, decays to 0
 
@@ -1534,6 +1535,7 @@
     slowmoFrames = 0;
     flashFrame = -1000;
     glitchFrame = -1000;
+    levelWarpFrame = -1000;
     slamFlash = -1000;
     zoomPunch = 0;
     landBounce = 0;
@@ -2131,7 +2133,9 @@
       }
       audio.levelup && audio.levelup();
       flashFrame = frame;
-      zoomPunch = Math.max(zoomPunch, 0.06);
+      levelWarpFrame = frame;
+      zoomPunch = Math.max(zoomPunch, 0.08);
+      slowmoFrames = Math.max(slowmoFrames, 10); // brief dramatic beat on biome change
       addRing(player.x + player.w / 2, player.y + player.h / 2, 160, palette.accent, 38);
       music.duck();
       missionEvent('level', levelIdx);
@@ -3991,6 +3995,34 @@
         ctx.fillRect(6, y + 4, W + 12, h * 0.6);
       }
       ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // Biome-transition warp — an expanding colour shockwave in the new palette
+    // plus outward light streaks, so each level change reads as a hyperspace jump.
+    const warpAge = frame - levelWarpFrame;
+    if (warpAge >= 0 && warpAge < 40) {
+      const p = warpAge / 40;          // 0 → 1 progress
+      const k = 1 - p;                 // fade out
+      const cy = GROUND - 160;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const rad = p * Math.hypot(W, H) * 0.65;
+      const ring = ctx.createRadialGradient(W / 2, cy, Math.max(1, rad - 70), W / 2, cy, rad + 40);
+      ring.addColorStop(0, 'rgba(' + palette.accent + ',0)');
+      ring.addColorStop(0.72, 'rgba(' + palette.accent + ',' + (0.30 * k).toFixed(3) + ')');
+      ring.addColorStop(1, 'rgba(' + palette.accent + ',0)');
+      ctx.fillStyle = ring;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.22 * k).toFixed(3) + ')';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 12; i++) {
+        const yy = (i + 0.5) / 12 * H;
+        const sx = W / 2 + Math.sin(i * 12.9) * 30;
+        const ll = 80 + p * W;
+        ctx.beginPath(); ctx.moveTo(sx - ll, yy); ctx.lineTo(sx - ll * 0.35, yy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx + ll * 0.35, yy); ctx.lineTo(sx + ll, yy); ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 
