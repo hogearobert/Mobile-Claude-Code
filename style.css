@@ -139,6 +139,16 @@ html, body {
   0%, 100% { box-shadow: 0 0 14px rgba(255, 225, 74, 0.45); }
   50% { box-shadow: 0 0 28px rgba(255, 61, 240, 0.75); }
 }
+/* Within 5% of breaking the record — faster, hotter pulse */
+.badge.record.imminent {
+  border-color: var(--neon-pink);
+  color: #fff;
+  animation: recordImminent 0.28s ease-in-out infinite;
+}
+@keyframes recordImminent {
+  0%, 100% { box-shadow: 0 0 16px rgba(255, 61, 240, 0.65); transform: scale(1); }
+  50% { box-shadow: 0 0 32px rgba(255, 225, 74, 0.95); transform: scale(1.05); }
+}
 
 .badge.coins .label { font-size: 14px; opacity: 1; margin-bottom: 0; }
 
@@ -1209,7 +1219,8 @@ html, body {
   .fever-bar.active .fever-fill,
   .pw.sprint,
   .pw.phase,
-  .badge.record.close {
+  .badge.record.close,
+  .badge.record.imminent {
     animation: none !important;
   }
 }

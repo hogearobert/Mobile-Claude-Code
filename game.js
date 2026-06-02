@@ -2087,7 +2087,8 @@
     }
     const ratio = Math.min(1, score / best);
     recProgFillEl.style.transform = 'scaleX(' + ratio + ')';
-    recordBadgeEl.classList.toggle('close', ratio > 0.85 && ratio < 1);
+    recordBadgeEl.classList.toggle('close', ratio > 0.85 && ratio <= 0.95);
+    recordBadgeEl.classList.toggle('imminent', ratio > 0.95 && ratio < 1);
   }
   function updatePowerHud() {
     if (pwMagnetEl) {
