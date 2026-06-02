@@ -1965,7 +1965,7 @@
     if (t === 'spike')   obstacles.push({ type: t, x, y: GROUND - 30, w: 36, h: 30 });
     else if (t === 'block')   obstacles.push({ type: t, x, y: GROUND - 44, w: 44, h: 44 });
     else if (t === 'tall')    obstacles.push({ type: t, x, y: GROUND - 80, w: 32, h: 80 });
-    else if (t === 'flying')  obstacles.push({ type: t, x, y: GROUND - 140, w: 56, h: 32 });
+    else if (t === 'flying')  obstacles.push({ type: t, x, y: GROUND - 140, w: 56, h: 32, baseY: GROUND - 140, bobAmp: 18 + rnd() * 12, bobPh: rnd() * 6.28, bobSp: 0.05 + rnd() * 0.02 });
     else if (t === 'overhang')obstacles.push({ type: t, x, y: GROUND - 80, w: 46, h: 50 });
   }
 
@@ -2415,7 +2415,11 @@
     }
 
     // Move obstacles
-    obstacles.forEach((o) => (o.x -= speed + (o.vx || 0)));
+    obstacles.forEach((o) => {
+      o.x -= speed + (o.vx || 0);
+      // Flyers gently bob on a sine path — adds life; stays within run-under clearance
+      if (o.bobAmp) o.y = o.baseY + Math.sin(frame * o.bobSp + o.bobPh) * o.bobAmp;
+    });
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
     springs.forEach((s) => { s.x -= speed; s.t += 0.15; if (s.used > 0) s.used--; });
     springs = springs.filter((s) => s.x + s.w > -30);
