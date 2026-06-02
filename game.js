@@ -604,6 +604,8 @@
   // ---------- Combo ----------
   let combo = 0;
   let lastCoinFrame = -1000;
+  let lastCoinX = 0, lastCoinY = 0; // for chain-link visual between consecutive pickups
+  let coinChains = []; // fading electric arcs between consecutive coin grabs
   // Window scales with combo: tight when cold (0.8s), generous when hot (2.5s).
   function comboWindow() { return Math.round((48 + Math.min(combo, 15) * 7) * (1 + upgLvl('combo') * 0.15) * (1 + perkVal('combo'))); }
   function comboMult() { return combo >= 15 ? 4 : combo >= 10 ? 3 : combo >= 5 ? 2 : 1; }
@@ -1684,6 +1686,8 @@
     skyGradientH = -1;
     combo = 0;
     lastCoinFrame = -1000;
+    lastCoinX = 0; lastCoinY = 0;
+    coinChains = [];
     powerups = [];
     springs = [];
     // COSMIC skin: kick off the run with a free magnet window
@@ -2716,6 +2720,13 @@
       for (const c of slamCracks) { c.x -= speed; c.life--; }
       slamCracks = slamCracks.filter((c) => c.life > 0 && c.x > -120);
     }
+    // Coin-chain arcs scroll + fade. We also drift the stored last-pickup point
+    // so a follow-up coin computes its delta in the same scrolled frame.
+    if (coinChains.length) {
+      for (const c of coinChains) { c.x1 -= speed; c.x2 -= speed; c.life--; }
+      coinChains = coinChains.filter((c) => c.life > 0);
+    }
+    if (lastCoinFrame > 0) lastCoinX -= speed;
 
     // METEOR update — meteors drift left with scroll AND fall toward their tx,
     // because the shadow stays world-anchored. On impact: flash, ring, dust,
@@ -2955,9 +2966,19 @@
         const gm = gemMult(c.type);
         runCoins += ((feverActive ? 2 : 1) + upgLvl('stars') + perkVal('coin')) * gm;
         missionEvent('coin');
-        if (frame - lastCoinFrame < comboWindow()) combo++;
-        else combo = 1;
+        if (frame - lastCoinFrame < comboWindow()) {
+          combo++;
+          // Chain arc from the previous pickup to this one — only when the
+          // combo is alive AND points are close enough that the line reads
+          // as a single tight pickup streak (not a teleport across the screen).
+          const ddx = c.x - lastCoinX, ddy = c.y - lastCoinY;
+          if (combo >= 2 && (ddx * ddx + ddy * ddy) < 220 * 220) {
+            coinChains.push({ x1: lastCoinX, y1: lastCoinY, x2: c.x, y2: c.y, life: 14 });
+            if (coinChains.length > 24) coinChains.shift();
+          }
+        } else combo = 1;
         lastCoinFrame = frame;
+        lastCoinX = c.x; lastCoinY = c.y;
         const m = comboMult();
         const gain = 5 * m * feverScoreMult() * sprintMult() * gm;
         score += gain;
@@ -3830,6 +3851,42 @@
   // Magnet attraction streaks — soft additive lines from each in-range coin
   // toward the player while the magnet is active. Sells the pull effect and
   // turns the magnet from "just pulls them" into "looks INSANE pulling them".
+  // Coin-chain arcs — short jagged lines connecting consecutive combo pickups,
+  // fading over 14 frames. Reads as a literal "chain" being woven through the
+  // air as you grab streaks of coins.
+  function drawCoinChains() {
+    if (!coinChains.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (const c of coinChains) {
+      const k = c.life / 14;
+      const dx = c.x2 - c.x1, dy = c.y2 - c.y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 1) continue;
+      const ux = -dy / len, uy = dx / len; // perpendicular for jitter
+      const j1 = 6 * (Math.random() - 0.5);
+      const j2 = 6 * (Math.random() - 0.5);
+      const mx = c.x1 + dx * 0.5 + ux * j1;
+      const my = c.y1 + dy * 0.5 + uy * j1 + j2;
+      ctx.strokeStyle = 'rgba(255,225,120,' + (0.7 * k).toFixed(3) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(c.x1, c.y1);
+      ctx.lineTo(mx, my);
+      ctx.lineTo(c.x2, c.y2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 * k).toFixed(3) + ')';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(c.x1, c.y1);
+      ctx.lineTo(mx, my);
+      ctx.lineTo(c.x2, c.y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawMagnetStreaks() {
     if (magnetFrames <= 0 || !coinsArr.length) return;
     const pcx = player.x + player.w / 2;
@@ -4473,6 +4530,7 @@
     drawSetpieceBoss();
     drawCoins();
     drawMagnetStreaks();
+    drawCoinChains();
     drawPowerups();
     drawMystery();
     drawParticles();
