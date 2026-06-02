@@ -3326,6 +3326,37 @@
     }
     ctx.restore();
 
+    // AURORA biome — sweeping ribbons of green/cyan light waving across the sky.
+    // Three overlapping bands at different heights, each a sine-warped horizontal
+    // strip with vertical falloff. Sells the biome name beyond just palette.
+    if (palette.name === 'AURORA') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const bands = [
+        { cy: GROUND - 360, amp: 36, ph: frame * 0.012,         col: '100,255,200', alpha: 0.45 },
+        { cy: GROUND - 320, amp: 48, ph: frame * 0.018 + 1.7,   col: '120,200,255', alpha: 0.35 },
+        { cy: GROUND - 280, amp: 28, ph: frame * 0.010 + 3.1,   col: '180,255,220', alpha: 0.28 }
+      ];
+      for (const b of bands) {
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 12) {
+          const y = b.cy + Math.sin(x * 0.013 + b.ph) * b.amp + Math.sin(x * 0.04 + b.ph * 2) * 6;
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        // close band into a vertical strip
+        ctx.lineTo(W, b.cy + 80);
+        ctx.lineTo(0, b.cy + 80);
+        ctx.closePath();
+        const g = ctx.createLinearGradient(0, b.cy - 30, 0, b.cy + 80);
+        g.addColorStop(0, 'rgba(' + b.col + ',0)');
+        g.addColorStop(0.4, 'rgba(' + b.col + ',' + b.alpha + ')');
+        g.addColorStop(1, 'rgba(' + b.col + ',0)');
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     // Stars
     for (const s of stars) {
       const a = 0.5 + Math.sin(s.tw) * 0.4;
