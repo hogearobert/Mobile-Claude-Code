@@ -449,7 +449,8 @@
     loginDate: NS + 'loginDate',
     loginStreak: NS + 'loginStreak',
     xp: NS + 'xp',
-    skinUnlocked: NS + 'skinUnlocked'
+    skinUnlocked: NS + 'skinUnlocked',
+    ghostRun: NS + 'ghostRun' // sampled trajectory of the player's best run
   };
   function readLS(k, dflt) { try { return localStorage.getItem(k) ?? dflt; } catch (_) { return dflt; } }
   function writeLS(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
@@ -561,6 +562,19 @@
 
   let score = 0;
   let dist = 0;            // pacing driver (distance run) — decoupled from coins
+  // GHOST RUNNER — a sampled trajectory of the player's best run plays back
+  // alongside the current run, so you visibly race your past self.
+  // Samples are taken every GHOST_SAMPLE_FRAMES at the player position, then
+  // persisted to localStorage if the new run sets a record.
+  const GHOST_SAMPLE_FRAMES = 6; // ~10 samples/sec — smooth enough, cheap to store
+  let ghostRec = [];   // recording from the current run (array of y values)
+  let ghostPlay = [];  // best-run trajectory loaded from localStorage
+  let ghostHead = 0;   // current playback index for ghostPlay
+  function loadGhost() {
+    try { const raw = readLS(SK.ghostRun, null); ghostPlay = raw ? JSON.parse(raw) : []; }
+    catch (_) { ghostPlay = []; }
+  }
+  loadGhost();
   let runCoins = 0;
   let frame = 0;
   let nextObstacleAt = 60;
@@ -1659,6 +1673,8 @@
     speed = baseSpeed;
     score = 0;
     dist = 0;
+    ghostRec = [];
+    ghostHead = 0;
     runCoins = 0;
     frame = 0;
     nextObstacleAt = 60;
@@ -1796,6 +1812,9 @@
         bestEl.textContent = best;
         newRecord = true;
         if (prevBest > 0) goalMsg = '+' + (score - prevBest) + ' peste recordul anterior!';
+        // Persist the trajectory so next run shows you racing your past self
+        try { writeLS(SK.ghostRun, JSON.stringify(ghostRec.map((y) => Math.round(y)))); } catch (_) {}
+        ghostPlay = ghostRec.slice();
       } else if (best > 0) {
         const diff = best - score;
         if (diff <= 50) goalMsg = 'Atât de aproape! ' + diff + ' până la record';
@@ -3115,6 +3134,15 @@
 
     // dist drives all pacing (level / speed / spawns) — steady, coin-independent.
     dist += 1;
+    // GHOST RUNNER — sample our position into the recording every N frames,
+    // and advance the playback head in lockstep so the ghost re-traces the
+    // best run at exactly the same dist as it played before. Skipped on
+    // dailyMode (those runs have their own deterministic dynamics).
+    if (!dailyMode && frame % GHOST_SAMPLE_FRAMES === 0) {
+      ghostRec.push(player.y);
+      if (ghostRec.length > 4000) ghostRec.shift(); // cap ~40min
+      ghostHead++;
+    }
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
     score += (1 + levelIdx * 0.1) * feverScoreMult() * sprintMult();
     tryLevelUp();
@@ -3467,6 +3495,43 @@
       ctx.lineTo(W, y);
       ctx.stroke();
     }
+  }
+
+  // GHOST RUNNER — draws a translucent silhouette of your best run at the
+  // matching dist sample. Only renders during play (PLAY state), only when a
+  // ghost trajectory exists, and only after the current ghostHead is within
+  // the stored playback range.
+  function drawGhost() {
+    if (state !== STATE.PLAY || dailyMode) return;
+    if (!ghostPlay || ghostPlay.length === 0) return;
+    if (ghostHead >= ghostPlay.length) return;
+    // Interpolate between two samples for a smooth ghost (we sample once every
+    // GHOST_SAMPLE_FRAMES, so between samples we lerp using the sub-frame).
+    const i = Math.min(ghostHead, ghostPlay.length - 1);
+    const j = Math.min(i + 1, ghostPlay.length - 1);
+    const t = ((frame % GHOST_SAMPLE_FRAMES) / GHOST_SAMPLE_FRAMES);
+    const gy = ghostPlay[i] + (ghostPlay[j] - ghostPlay[i]) * t;
+    const gx = player.x + player.w / 2;
+    const gcy = gy + player.h / 2;
+    // Subtle violet aura — clearly distinct from the orb but never visually
+    // competing for attention.
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const halo = ctx.createRadialGradient(gx, gcy, 0, gx, gcy, 36);
+    halo.addColorStop(0, 'rgba(180,140,255,0.55)');
+    halo.addColorStop(1, 'rgba(180,140,255,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(gx - 36, gcy - 36, 72, 72);
+    ctx.fillStyle = 'rgba(220,200,255,0.42)';
+    ctx.beginPath();
+    ctx.arc(gx, gcy, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(gx, gcy, 18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawPlayer() {
@@ -4539,6 +4604,7 @@
     drawObstacles();
     drawMeteors();
     drawSprings();
+    drawGhost();
     drawPlayer();
     drawForeground();
     drawTexts();
