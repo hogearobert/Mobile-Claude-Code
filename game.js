@@ -924,6 +924,7 @@
         addRing(W / 2, GROUND - 120, 200, '255,140,60', 36);
         shake = Math.max(shake, 10);
         audio.power();
+        if (!hasAch('meteor_dodge')) unlock('meteor_dodge');
       }
       setpiece = null;
       nextObstacleAt = frame + 75;
@@ -1008,6 +1009,11 @@
     { id: 'slam_triple',   name: 'Cutremur',            desc: 'Distruge 3 obstacole dintr-un Slam', reward: 90 },
     { id: 'phase_first',   name: 'Fantomă',             desc: 'Activează PHASE',                reward: 25 },
     { id: 'phase_streak',  name: 'Intangibil',          desc: 'Treci prin 5 obstacole într-un PHASE', reward: 90 },
+    { id: 'combo_50',      name: 'Legendă Combo',       desc: 'Atinge 50 combo',               reward: 250 },
+    { id: 'slam_master',   name: 'Maestrul Slam',       desc: '100 de obstacole distruse cu Slam', reward: 200 },
+    { id: 'phase_lord',    name: 'Stăpânul Fantomă',    desc: '25 de Phase-uri folosite',      reward: 200 },
+    { id: 'ghost_beat',    name: 'Mai rapid ca fantoma', desc: 'Treci de fantoma run-ului precedent', reward: 150 },
+    { id: 'meteor_dodge',  name: 'Cer Senin',           desc: 'Supraviețuiește unui Meteor Shower', reward: 120 },
     { id: 'score_10000',   name: 'Astronautul',         desc: 'Atinge 10.000 scor',             reward: 300 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
@@ -2479,6 +2485,7 @@
       lifeSlams += destroyed; writeLS(SK.lifeSlams, lifeSlams);
       if (!hasAch('slam_first')) unlock('slam_first');
       if (destroyed >= 3 && !hasAch('slam_triple')) unlock('slam_triple');
+      if (lifeSlams >= 100 && !hasAch('slam_master')) unlock('slam_master');
     }
   }
 
@@ -3126,6 +3133,7 @@
           music.duck();
           missionEvent('phase');
           lifePhases++; writeLS(SK.lifePhases, lifePhases);
+          if (lifePhases >= 25 && !hasAch('phase_lord')) unlock('phase_lord');
           showTipOnce('phase', '👻 PHASE', 'Treci prin obstacole — fără frică!');
           if (!hasAch('phase_first')) unlock('phase_first');
         }
@@ -3167,6 +3175,7 @@
         addFever(0.12);
         if (audio.power) audio.power();
         if (navigator.vibrate) { try { navigator.vibrate([20, 30, 60]); } catch (_) {} }
+        if (!hasAch('ghost_beat')) unlock('ghost_beat');
       }
     }
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
@@ -3221,6 +3230,7 @@
     if (score >= 10000 && !hasAch('score_10000')) unlock('score_10000');
     if (combo >= 10 && !hasAch('combo_10')) unlock('combo_10');
     if (combo >= 20 && !hasAch('combo_20')) unlock('combo_20');
+    if (combo >= 50 && !hasAch('combo_50')) unlock('combo_50');
     if (magnetFrames > 0 && !hasAch('magnet')) unlock('magnet');
     if (levelIdx >= 3 && !hasAch('level_3')) unlock('level_3');
     if (levelIdx >= 5 && !hasAch('level_6')) unlock('level_6');
