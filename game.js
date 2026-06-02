@@ -550,7 +550,7 @@
   let combo = 0;
   let lastCoinFrame = -1000;
   // Window scales with combo: tight when cold (0.8s), generous when hot (2.5s).
-  function comboWindow() { return Math.round(48 + Math.min(combo, 15) * 7); }
+  function comboWindow() { return Math.round((48 + Math.min(combo, 15) * 7) * (1 + upgLvl('combo') * 0.15)); }
   function comboMult() { return combo >= 15 ? 4 : combo >= 10 ? 3 : combo >= 5 ? 2 : 1; }
 
   // ---------- Power-ups ----------
@@ -897,6 +897,22 @@
     { id: 'level_x',    type: 'final', mk: () => ({ n: 2 + Math.floor(Math.random()*3), goal: 1 }),         label: (m) => 'Ajunge la nivelul ' + (m.n + 1), reward: 55 }
   ];
   const MK = { current: SK.skinUnlocked + '.current' };
+
+  // ---------- Persistent upgrades (the meta-progression engine) ----------
+  // Stars buy permanent power growth that carries between runs — the loop that
+  // turns "one more run" into "one more level". Costs ramp so each tier feels
+  // earned. Effects are applied at the consumption site (look for upgLvl()).
+  const UPGRADES = [
+    { id: 'magnet',  name: 'MAGNET +',  desc: '+2s la durata magnetului',  costs: [60, 180, 450],  icon: '🧲' },
+    { id: 'combo',   name: 'COMBO +',   desc: '+15% fereastră de combo',   costs: [70, 200, 500],  icon: '🔥' },
+    { id: 'stars',   name: 'STAR +',    desc: '+1 stea per pickup',         costs: [80, 250, 700],  icon: '★'  },
+    { id: 'air',     name: 'AIR +',     desc: '+25% bonus air-time',        costs: [70, 200, 500],  icon: '🪂' },
+    { id: 'sprint',  name: 'BOOST +',   desc: '+1s la durata Sprint-ului', costs: [90, 280, 700],  icon: '⚡' }
+  ];
+  const upgKey = (id) => NS + 'upg.' + id;
+  function upgLvl(id) { return parseInt(readLS(upgKey(id), '0'), 10) || 0; }
+  function upgSet(id, lvl) { writeLS(upgKey(id), String(lvl)); }
+  function upgNextCost(u) { const lvl = upgLvl(u.id); return lvl >= u.costs.length ? null : u.costs[lvl]; }
   function loadMissions() {
     const today = todayStr();
     const saved = (function(){ try { return JSON.parse(readLS(NS + 'missions', 'null')); } catch (_) { return null; } })();
@@ -1024,6 +1040,48 @@
         }
       });
       grid.appendChild(div);
+    }
+    renderUpgrades();
+  }
+
+  function renderUpgrades() {
+    const list = document.getElementById('upgradeList');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const u of UPGRADES) {
+      const lvl = upgLvl(u.id);
+      const maxed = lvl >= u.costs.length;
+      const cost = maxed ? null : u.costs[lvl];
+      const card = document.createElement('div');
+      card.className = 'upg-card' + (maxed ? ' maxed' : '');
+      const dots = u.costs.map((_, i) => '<span class="dot' + (i < lvl ? ' filled' : '') + '"></span>').join('');
+      card.innerHTML =
+        '<div class="upg-icon">' + u.icon + '</div>' +
+        '<div class="upg-body">' +
+          '<div class="upg-head"><span class="upg-name">' + u.name + '</span>' +
+            '<span class="upg-dots">' + dots + '</span></div>' +
+          '<div class="upg-desc">' + u.desc + '</div>' +
+        '</div>' +
+        '<button class="upg-buy"' + (maxed ? ' disabled' : '') + '>' +
+          (maxed ? 'MAX' : (cost + ' ★')) + '</button>';
+      const btn = card.querySelector('.upg-buy');
+      if (btn && !maxed) btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (totalCoins < cost) {
+          showToast('Nu ai destule stele', 'Îți trebuie ' + (cost - totalCoins) + ' ★');
+          return;
+        }
+        totalCoins -= cost;
+        writeLS(SK.coins, totalCoins);
+        coinsEl.textContent = totalCoins;
+        upgSet(u.id, lvl + 1);
+        audio.levelup();
+        showToast('🚀 ' + u.name + ' Lv.' + (lvl + 1), u.desc);
+        renderUpgrades();
+        // Refresh the shop coin badge too
+        const cc = document.getElementById('shopCoins'); if (cc) cc.textContent = totalCoins;
+      });
+      list.appendChild(card);
     }
   }
 
@@ -1992,7 +2050,8 @@
         // Air-time bonus — rewards committed long jumps (also covers double jumps,
         // since airframes counts continuous time off the floor)
         if (airframes > 35) {
-          const bonus = Math.min(60, Math.floor(airframes / 1.2));
+          const baseBonus = Math.min(60, Math.floor(airframes / 1.2));
+          const bonus = Math.floor(baseBonus * (1 + upgLvl('air') * 0.25));
           score += bonus * feverScoreMult();
           popText('+' + (bonus * feverScoreMult()) + ' AIR!', player.x + player.w / 2, GROUND - 80, '#ffe14a', 1.05);
           addRing(player.x + player.w / 2, GROUND - 18, 46, '255,225,74', 18);
@@ -2311,7 +2370,7 @@
       const dy = c.y - pcy;
       if (dx * dx + dy * dy < (c.r + pcr + 6) * (c.r + pcr + 6)) {
         c.picked = true;
-        runCoins += feverActive ? 2 : 1;
+        runCoins += (feverActive ? 2 : 1) + upgLvl('stars');
         missionEvent('coin');
         if (frame - lastCoinFrame < comboWindow()) combo++;
         else combo = 1;
@@ -2354,16 +2413,18 @@
       if (dx * dx + dy * dy < (p.r + pcr + 6) * (p.r + pcr + 6)) {
         p.picked = true;
         if (p.type === 'magnet') {
-          magnetFrames = 60 * 8;
-          popText('MAGNET 8s', p.x, p.y - 20, '#ffe14a', 1.2);
+          const dur = 60 * (8 + upgLvl('magnet') * 2);
+          magnetFrames = dur;
+          popText('MAGNET ' + (dur / 60).toFixed(0) + 's', p.x, p.y - 20, '#ffe14a', 1.2);
           addRing(p.x, p.y, 70, '255,225,74', 28);
         } else if (p.type === 'shield') {
           shieldActive = true;
           popText('SHIELD', p.x, p.y - 20, '#19f0ff', 1.2);
           addRing(p.x, p.y, 70, '25,240,255', 28);
         } else if (p.type === 'sprint') {
-          sprintFrames = 60 * 5;
-          popText('SPRINT 5s', p.x, p.y - 20, '#fff', 1.3);
+          const dur = 60 * (5 + upgLvl('sprint'));
+          sprintFrames = dur;
+          popText('SPRINT ' + (dur / 60).toFixed(0) + 's', p.x, p.y - 20, '#fff', 1.3);
           addRing(p.x, p.y, 80, '255,255,255', 30);
           zoomPunch = Math.max(zoomPunch, 0.06);
           shake = Math.max(shake, 5);

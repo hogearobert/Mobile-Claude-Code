@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=54" />
+  <link rel="stylesheet" href="style.css?v=55" />
 </head>
 <body>
   <div id="app">
@@ -120,10 +120,13 @@
     <div id="shopOverlay" class="overlay screen">
       <div class="panel wide">
         <div class="screen-head">
-          <h2 class="screen-title">SKIN-URI</h2>
+          <h2 class="screen-title">MAGAZIN</h2>
           <div class="screen-coins">★ <span id="shopCoins">0</span></div>
         </div>
+        <h3 class="sub-title">SKIN-URI</h3>
         <div id="skinGrid" class="skin-grid"></div>
+        <h3 class="sub-title">UPGRADES</h3>
+        <div id="upgradeList" class="upgrade-list"></div>
       </div>
     </div>
 
@@ -176,7 +179,7 @@
 
   </div>
 
-  <script src="game.js?v=54"></script>
+  <script src="game.js?v=55"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT
