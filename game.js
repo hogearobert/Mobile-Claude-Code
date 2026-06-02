@@ -555,6 +555,7 @@
 
   // ---------- Power-ups ----------
   let powerups = [];
+  let springs = [];
   let magnetFrames = 0;
   let shieldActive = false;
   let sprintFrames = 0;
@@ -1328,6 +1329,7 @@
     combo = 0;
     lastCoinFrame = -1000;
     powerups = [];
+    springs = [];
     magnetFrames = 0;
     shieldActive = false;
     sprintFrames = 0;
@@ -1718,6 +1720,7 @@
     updateFeverUI();
     obstacles = obstacles.filter((o) => o.x > W * 0.55);
     powerups = powerups.filter((p) => p.x > W * 0.55);
+    springs = springs.filter((s) => s.x > W * 0.55);
     player.y = GROUND - player.h - 40;
     player.vy = -8;
     player.jumps = 0;
@@ -1765,7 +1768,11 @@
     { id: 'triple_hop', minScore: 700,  span: 320, obs: [{ t: 'spike', dx: 0 }, { t: 'spike', dx: 160 }, { t: 'spike', dx: 320 }], coins: { dx: 80, arc: true } },
     { id: 'double_slide', minScore: 820, span: 300, obs: [{ t: 'overhang', dx: 0 }, { t: 'overhang', dx: 300 }], coins: { dx: 0, lowArc: true } },
     { id: 'flyer_pair', minScore: 1000, span: 360, obs: [{ t: 'flying', dx: 0 }, { t: 'flying', dx: 360 }], coins: { dx: 120, lowArc: true } },
-    { id: 'weave',      minScore: 1300, span: 680, obs: [{ t: 'spike', dx: 0 }, { t: 'overhang', dx: 220 }, { t: 'spike', dx: 440 }, { t: 'overhang', dx: 680 }] }
+    { id: 'weave',      minScore: 1300, span: 680, obs: [{ t: 'spike', dx: 0 }, { t: 'overhang', dx: 220 }, { t: 'spike', dx: 440 }, { t: 'overhang', dx: 680 }] },
+    // Jump-pad patterns — the high coin arcs are only reachable via the spring,
+    // so the player has to commit to the launch to claim the reward.
+    { id: 'spring_high',  minScore: 400, span: 220, obs: [], spring: { dx: 30 }, coins: { dx: 30, springArc: true } },
+    { id: 'spring_dodge', minScore: 900, span: 460, obs: [{ t: 'spike', dx: 460 }], spring: { dx: 30 }, coins: { dx: 30, springArc: true } }
   ];
 
   function spawnPattern() {
@@ -1773,12 +1780,18 @@
     const p = pool[Math.floor(rnd() * pool.length)];
     const x0 = W + 20;
     for (const o of p.obs) makeObstacle(o.t, x0 + o.dx);
+    if (p.spring) springs.push({ x: x0 + p.spring.dx, y: GROUND - 14, w: 60, h: 14, used: 0, t: rnd() * Math.PI * 2 });
     // Optional reward coins woven into the pattern
     if (p.coins) {
       const cx0 = x0 + (p.coins.dx || 0);
       if (p.coins.lowArc) {
         // coins to grab while sliding under the overhang
         for (let i = 0; i < 3; i++) coinsArr.push({ x: cx0 + i * 26, y: GROUND - 22, r: 13, picked: false, t: rnd() * 6.28 });
+      } else if (p.coins.springArc) {
+        // High arc — only reachable after the jump-pad launch
+        for (let i = 0; i < 6; i++) {
+          coinsArr.push({ x: cx0 + i * 34, y: GROUND - 230 - Math.sin((i / 5) * Math.PI) * 70, r: 13, picked: false, t: rnd() * 6.28 });
+        }
       } else if (p.coins.arc || p.coins.midArc) {
         const baseY = GROUND - (p.coins.midArc ? 150 : 120);
         for (let i = 0; i < 5; i++) {
@@ -2001,6 +2014,35 @@
     if (player.onGround && !player.sliding) {
       groundRoll += speed / 22;
     }
+    // Jump-pad launch — if grounded AND stood/rolled onto a spring, fire upward.
+    // Cooldown frames on the spring stop the orb re-bouncing on the same step.
+    // jumps is reset to 0 so the player can still double-jump from the apex,
+    // turning the launch into a high-arc air play.
+    if (player.onGround && !player.sliding) {
+      for (const s of springs) {
+        if (s.used > 0) continue;
+        if (player.x + player.w > s.x + 4 && player.x + 4 < s.x + s.w) {
+          s.used = 10;
+          player.vy = jumpV * 1.55;
+          player.onGround = false;
+          player.jumps = 0;
+          airframes = 1;
+          audio.power();
+          if (navigator.vibrate) { try { navigator.vibrate(25); } catch (_) {} }
+          shake = Math.max(shake, 4);
+          addRing(s.x + s.w / 2, GROUND, 70, '255,255,255', 20);
+          popText('LAUNCH!', s.x + s.w / 2, GROUND - 90, '#fff', 1.1);
+          for (let i = 0; i < 14; i++) {
+            const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
+            const v = Math.random() * 5 + 2;
+            pushParticle(s.x + s.w / 2 + (Math.random() - 0.5) * 30, GROUND - 4,
+              Math.cos(a) * v, Math.sin(a) * v, 30, '#fff', Math.random() * 2 + 1);
+          }
+          break;
+        }
+      }
+    }
+
     // Slide squash animation (0 = standing, 1 = fully crouched)
     const slideTarget = player.sliding && player.onGround ? 1 : 0;
     player.slideT += (slideTarget - player.slideT) * 0.35;
@@ -2072,6 +2114,8 @@
     // Move obstacles
     obstacles.forEach((o) => (o.x -= speed + (o.vx || 0)));
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
+    springs.forEach((s) => { s.x -= speed; s.t += 0.15; if (s.used > 0) s.used--; });
+    springs = springs.filter((s) => s.x + s.w > -30);
 
     // Player collision circle — matches the drawn orb; shrinks & drops while sliding
     const sTc = player.slideT;
@@ -2923,6 +2967,47 @@
     }
   }
 
+  function drawSprings() {
+    for (const s of springs) {
+      const cx = s.x + s.w / 2;
+      const compress = s.used > 0 ? (s.used / 10) * 6 : 0; // squashes briefly after firing
+      const top = s.y + compress;
+      const h = s.h - compress;
+      const pulse = 0.7 + 0.3 * Math.abs(Math.sin(s.t));
+      // Glow halo under the pad
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(cx, GROUND, 0, cx, GROUND, 56);
+      g.addColorStop(0, 'rgba(255,255,255,' + (0.45 * pulse) + ')');
+      g.addColorStop(0.5, 'rgba(25,240,255,' + (0.25 * pulse) + ')');
+      g.addColorStop(1, 'rgba(25,240,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - 56, GROUND - 56, 112, 80);
+      ctx.restore();
+      // Base plate — bright cyan with white top edge
+      const grad = ctx.createLinearGradient(s.x, top, s.x, top + h);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.45, '#19f0ff');
+      grad.addColorStop(1, '#1a4a8c');
+      ctx.fillStyle = grad;
+      ctx.fillRect(s.x, top, s.w, h);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(s.x, top, s.w, 2);
+      // Upward chevrons — show direction at a glance
+      ctx.fillStyle = 'rgba(7, 9, 26, 0.75)';
+      for (let i = 0; i < 3; i++) {
+        const ax = s.x + 14 + i * 16;
+        const ay = top + h * 0.55 - Math.sin(s.t + i * 0.5) * 1.4;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay + 5);
+        ctx.lineTo(ax + 5, ay - 3);
+        ctx.lineTo(ax - 5, ay - 3);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+
   function drawTexts() {
     for (const t of texts) {
       const a = Math.min(1, t.life / 40);
@@ -3240,10 +3325,17 @@
       const a = 0.4 * Math.max(0, 1 - (GROUND - p.y) / FADE);
       if (a < 0.03) continue;
       ctx.globalAlpha = a;
-      ctx.fillStyle = p.type === 'magnet' ? 'rgba(255,225,74,1)' : 'rgba(25,240,255,1)';
+      ctx.fillStyle = p.type === 'magnet' ? 'rgba(255,225,74,1)' : p.type === 'shield' ? 'rgba(25,240,255,1)' : 'rgba(255,255,255,1)';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // Springs — bright cyan slab, hardly fades because they sit on the floor
+    ctx.fillStyle = 'rgba(25,240,255,1)';
+    for (const s of springs) {
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(s.x, s.y, s.w, s.h);
     }
 
     // Player orb — the headline reflection (soft halo + bright core)
@@ -3318,6 +3410,7 @@
     drawParticles();
     drawRings();
     drawObstacles();
+    drawSprings();
     drawPlayer();
     drawForeground();
     drawTexts();
