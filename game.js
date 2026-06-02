@@ -2221,6 +2221,10 @@
     { id: 'stair_up',   minScore: 1800, span: 340, obs: [{ t: 'spike', dx: 0 }, { t: 'block', dx: 160 }, { t: 'tall', dx: 340 }], coins: { dx: 80, arc: true } },
     { id: 'flyer_weave', minScore: 1900, span: 540, obs: [{ t: 'flying', dx: 0 }, { t: 'spike', dx: 180 }, { t: 'flying', dx: 360 }, { t: 'spike', dx: 540 }], coins: { dx: 60, arc: true } },
     { id: 'slide_run',  minScore: 2100, span: 600, obs: [{ t: 'overhang', dx: 0 }, { t: 'overhang', dx: 200 }, { t: 'overhang', dx: 400 }, { t: 'spike', dx: 600 }], coins: { dx: 0, lowArc: true } },
+    // Even-later variety: dense weaves, sky-walls, and a spring escape.
+    { id: 'sky_wall',   minScore: 2400, span: 280, obs: [{ t: 'tall', dx: 0 }, { t: 'spike', dx: 140 }, { t: 'tall', dx: 280 }], coins: { dx: 60, arc: true } },
+    { id: 'flyer_storm', minScore: 2600, span: 720, obs: [{ t: 'flying', dx: 0 }, { t: 'flying', dx: 200 }, { t: 'flying', dx: 400 }, { t: 'flying', dx: 600 }, { t: 'spike', dx: 720 }], coins: { dx: 0, lowArc: true } },
+    { id: 'spring_storm', minScore: 2800, span: 460, obs: [{ t: 'overhang', dx: 0 }, { t: 'spike', dx: 460 }], spring: { dx: 180 }, coins: { dx: 180, springArc: true } },
     // Jump-pad patterns — the high coin arcs are only reachable via the spring,
     // so the player has to commit to the launch to claim the reward.
     { id: 'spring_high',  minScore: 400, span: 220, obs: [], spring: { dx: 30 }, coins: { dx: 30, springArc: true } },
