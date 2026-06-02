@@ -573,6 +573,7 @@
   let runMaxCombo = 0;
   let runNearMisses = 0;
   let runAirBonus = 0;
+  let runXpBanked = 0; // XP already credited this run (prevents double-count on revive)
   let recordBrokenThisRun = false;
 
   // ---------- Levels (palette + difficulty) ----------
@@ -1600,6 +1601,7 @@
     runMaxCombo = 0;
     runNearMisses = 0;
     runAirBonus = 0;
+    runXpBanked = 0;
     recordBrokenThisRun = false;
     levelIdx = 0;
     palette = LEVELS[0];
@@ -1767,7 +1769,8 @@
     runCoins = 0;
     writeLS(SK.coins, totalCoins);
     coinsEl.textContent = totalCoins;
-    awardXP(score); // lifetime pilot-rank progression (may grant rank-up + stars)
+    awardXP(score - runXpBanked); // only the new portion since any prior revive
+    runXpBanked = score;          // so a revived run never double-credits XP
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
     finalCoinsEl.textContent = '+' + earned;
