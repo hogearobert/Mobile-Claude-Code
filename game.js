@@ -520,6 +520,7 @@
 
   let obstacles = [];
   let coinsArr = [];
+  let meteors = []; // METEOR setpiece — falling projectiles with telegraphed shadows
   let particles = [];
   let stars = [];
   let mountains = [];
@@ -759,19 +760,20 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
-  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'tornado'];
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'tornado'];
   function startSetpiece() {
     const type = SETPIECE_TYPES[setpieceCount % SETPIECE_TYPES.length];
     setpieceCount++;
     nextSetpieceAt += 1300;
-    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : 560;
+    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : type === 'meteor' ? 540 : 560;
     setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
     // LOW-G: float section — soften gravity for a dreamy, hang-time coin harvest
     if (type === 'lowg') { gravity = BASE_GRAVITY * 0.42; showTipOnce('lowg', '🌙 LOW-G', 'Gravitație redusă — sari mult mai sus!'); }
-    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : type === 'lowg' ? '🌙 LOW-G 🌙' : '⚡ GAUNTLET ⚡';
-    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : type === 'lowg' ? '#8ad8ff' : '#ff3d6e';
+    if (type === 'meteor') { showTipOnce('meteor', '☄ METEOR', 'Evită zonele marcate cu portocaliu pe sol!'); }
+    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : type === 'lowg' ? '🌙 LOW-G 🌙' : type === 'meteor' ? '☄ METEOR SHOWER ☄' : '⚡ GAUNTLET ⚡';
+    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : type === 'lowg' ? '#8ad8ff' : type === 'meteor' ? '#ff7a3d' : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
     flashFrame = frame;
@@ -807,6 +809,38 @@
           for (let i = 0; i < 3; i++) coinsArr.push({ x: W + 30 + i * 28, y: by, r: 14, picked: false, type: rollGem(), t: rnd() * 6.28 });
         }
         setpiece.spawnTimer = 42 + Math.floor(rnd() * 16);
+      }
+    } else if (setpiece.type === 'meteor') {
+      // METEOR SHOWER — projectiles fall from the sky toward telegraphed
+      // ground positions. The shadow shows the impact x for ~50 frames before
+      // the meteor lands, so the player can read where to be (and where NOT).
+      // Reward arc coins between waves so you fight for ground when it's safe.
+      const settling = setpiece.t < 50 || setpiece.t > setpiece.dur - 70;
+      if (!settling && setpiece.spawnTimer <= 0) {
+        const r = rnd();
+        if (r < 0.85) {
+          // Telegraph a meteor: pick an impact x, spawn meteor far above.
+          const tx = 220 + rnd() * (W - 360); // never spawns at the screen edge
+          const ttl = 56;                     // frames until impact
+          const fallH = 460;                  // pixels falling
+          meteors.push({
+            tx,                               // impact x (screen coords)
+            y: GROUND - fallH,                // current y
+            vy: fallH / ttl,                  // linear-ish drop
+            ttl,                              // frames remaining until impact
+            t: 0,
+            r: 22 + rnd() * 6,                // visual radius
+            impact: 0                         // post-impact danger countdown
+          });
+          setpiece.spawnTimer = 30 + Math.floor(rnd() * 18);
+        } else {
+          // Reward coin arc between waves
+          const baseY = GROUND - 140 - rnd() * 80;
+          for (let i = 0; i < 4; i++) {
+            coinsArr.push({ x: W + 30 + i * 28, y: baseY - Math.sin((i / 3) * Math.PI) * 40, r: 14, picked: false, type: rollGem(), t: rnd() * 6.28 });
+          }
+          setpiece.spawnTimer = 50;
+        }
       }
     } else if (setpiece.type === 'lowg') {
       // Floaty harvest — tall coin arcs reachable thanks to the long hang-time,
@@ -855,6 +889,12 @@
         runCoins += 60;
         popText('+60 ★  GRAVITY ON', W / 2, GROUND - 200, '#8ad8ff', 1.4);
         addRing(W / 2, GROUND - 120, 180, '140,210,255', 32);
+        audio.power();
+      } else if (setpiece.type === 'meteor') {
+        runCoins += 100;
+        popText('+100 ★  CER SENIN!', W / 2, GROUND - 200, '#ff7a3d', 1.5);
+        addRing(W / 2, GROUND - 120, 200, '255,140,60', 36);
+        shake = Math.max(shake, 10);
         audio.power();
       }
       setpiece = null;
@@ -1585,6 +1625,7 @@
     ptrDown = false;
     obstacles = [];
     coinsArr = [];
+    meteors = [];
     particles = [];
     rings = [];
     scrollX = 0;
@@ -2616,6 +2657,35 @@
     springs.forEach((s) => { s.x -= speed; s.t += 0.15; if (s.used > 0) s.used--; });
     springs = springs.filter((s) => s.x + s.w > -30);
 
+    // METEOR update — meteors drift left with scroll AND fall toward their tx,
+    // because the shadow stays world-anchored. On impact: flash, ring, dust,
+    // brief danger window (player still has ~14 frames to clear the zone, but
+    // the impact-frame itself is the lethal moment). On exit they're cleaned up.
+    if (meteors.length) {
+      for (const m of meteors) {
+        m.t++;
+        m.tx -= speed;        // shadow scrolls with the world
+        m.y += m.vy;
+        m.ttl--;
+        if (m.ttl <= 0 && m.impact === 0) {
+          m.impact = 14;
+          m.y = GROUND - 4;
+          shake = Math.max(shake, 8);
+          addRing(m.tx, GROUND, 90, '255,140,60', 22);
+          addRing(m.tx, GROUND, 50, '255,225,74', 18);
+          for (let k = 0; k < 14; k++) {
+            const a = Math.random() * Math.PI - Math.PI;
+            const v = 2 + Math.random() * 5;
+            pushParticle(m.tx, GROUND - 2, Math.cos(a) * v, Math.sin(a) * v - 1, 26,
+              'rgba(255,160,60,0.85)', Math.random() * 3 + 1.5);
+          }
+          if (audio.hit) audio.hit();
+        }
+        if (m.impact > 0) m.impact--;
+      }
+      meteors = meteors.filter((m) => m.tx > -80 && (m.ttl > -8));
+    }
+
     // Player collision circle — matches the drawn orb; shrinks & drops while sliding
     const sTc = player.slideT;
     const pcx = player.x + player.w / 2;
@@ -2742,6 +2812,28 @@
             o.x = -999;
             shake = Math.max(shake, 14);
             audio.hit();
+            popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.4);
+            if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_) {} }
+            unlock('shield_save');
+            break;
+          }
+          gameOver();
+          return;
+        }
+      }
+      // Meteor collision — the meteor body itself (mid-fall) and a brief impact
+      // bloom on landing both kill. Shield absorbs (consistent with obstacles).
+      for (const m of meteors) {
+        const hitBody = m.ttl > 0 && circleRectHit(pcx, pcy, pcr, m.tx - m.r, m.y - m.r, m.r * 2, m.r * 2);
+        const hitImpact = m.impact > 8 && Math.abs(pcx - m.tx) < 44 && pcy > GROUND - 38;
+        if (hitBody || hitImpact) {
+          if (shieldActive) {
+            shieldActive = false; shieldFlashFrame = frame; invincibleUntil = frame + 60;
+            slowmoFrames = 30; glitchFrame = frame; flashFrame = frame;
+            zoomPunch = Math.max(zoomPunch, 0.07);
+            addRing(pcx, pcy, 110, '25,240,255', 30);
+            m.ttl = -100; m.impact = 0; // consume the meteor
+            shake = Math.max(shake, 14); audio.hit();
             popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.4);
             if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_) {} }
             unlock('shield_save');
@@ -3752,6 +3844,79 @@
     ctx.globalAlpha = 1;
   }
 
+  // Meteor + telegraphed ground shadow. The shadow pulses brighter as the
+  // impact frame approaches so the danger window reads at a glance.
+  function drawMeteors() {
+    if (!meteors.length) return;
+    for (const m of meteors) {
+      // Falling body
+      if (m.ttl > 0) {
+        const cx = m.tx + (GROUND - m.y) * 0.0; // straight down (visually clean)
+        const cy = m.y;
+        const tail = 26 + (1 - m.ttl / 56) * 14;
+        // Tail streak (sky → meteor head)
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const tg = ctx.createLinearGradient(cx, cy - tail * 3, cx, cy);
+        tg.addColorStop(0, 'rgba(255,160,60,0)');
+        tg.addColorStop(0.6, 'rgba(255,140,40,0.5)');
+        tg.addColorStop(1, 'rgba(255,225,140,0.9)');
+        ctx.fillStyle = tg;
+        ctx.beginPath();
+        ctx.moveTo(cx - m.r * 0.4, cy);
+        ctx.lineTo(cx + m.r * 0.4, cy);
+        ctx.lineTo(cx + 4, cy - tail * 3);
+        ctx.lineTo(cx - 4, cy - tail * 3);
+        ctx.closePath();
+        ctx.fill();
+        // Glow halo
+        const hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, m.r * 2.4);
+        hg.addColorStop(0, 'rgba(255,200,100,0.7)');
+        hg.addColorStop(1, 'rgba(255,140,40,0)');
+        ctx.fillStyle = hg;
+        ctx.fillRect(cx - m.r * 2.4, cy - m.r * 2.4, m.r * 4.8, m.r * 4.8);
+        ctx.restore();
+        // Hot core
+        ctx.fillStyle = '#fff5d0';
+        ctx.beginPath();
+        ctx.arc(cx, cy, m.r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ff7a3d';
+        ctx.beginPath();
+        ctx.arc(cx, cy, m.r * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+        // Ground shadow telegraph — pulsing arc; brighter as impact nears
+        const urgency = Math.max(0, 1 - m.ttl / 56);
+        const sw = 38 + urgency * 14;
+        const sh = 10 + urgency * 4;
+        const sa = 0.35 + 0.55 * urgency * (0.55 + 0.45 * Math.sin(m.t * 0.6));
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = 'rgba(255,140,60,' + sa.toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.ellipse(m.tx, GROUND - 2, sw, sh, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,200,120,' + (0.8 * urgency).toFixed(3) + ')';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(m.tx, GROUND - 2, sw + 4, sh + 1, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (m.impact > 0) {
+        // Post-impact bloom — a fading orange crater
+        const k = m.impact / 14;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const ig = ctx.createRadialGradient(m.tx, GROUND, 0, m.tx, GROUND, 60);
+        ig.addColorStop(0, 'rgba(255,220,140,' + (0.7 * k) + ')');
+        ig.addColorStop(1, 'rgba(255,140,40,0)');
+        ctx.fillStyle = ig;
+        ctx.fillRect(m.tx - 60, GROUND - 50, 120, 70);
+        ctx.restore();
+      }
+    }
+  }
+
   function drawObstacles() {
     for (const o of obstacles) {
       if (o.type === 'spike') {
@@ -4212,6 +4377,7 @@
     drawParticles();
     drawRings();
     drawObstacles();
+    drawMeteors();
     drawSprings();
     drawPlayer();
     drawForeground();
