@@ -161,6 +161,7 @@
     let muted = (function(){ try { return localStorage.getItem('glitchrun.v1.muteMusic') === '1'; } catch (_) { return false; } })();
     let ac = null, master = null, bassGain, padGain, leadGain, drumGain;
     let active = false;
+    let intense = false;  // OVERDRIVE-driven: extra hats + denser lead
     let song = null, bpm = 108, stepDur = 0;
     let stepIndex = 0;
     let nextTime = 0;
@@ -287,17 +288,21 @@
           playPad(nf(chord[i], 4), when, stepDur * beatsPerBar * 0.95);
         }
       }
-      // Lead arpeggio: every 8th note with random pickup
-      if (stepInBar % 2 === 0 && Math.random() < song.leadDensity) {
+      // Lead arpeggio: every 8th note with random pickup (denser during OVERDRIVE)
+      const leadProb = intense ? Math.min(0.95, song.leadDensity * 1.6) : song.leadDensity;
+      if (stepInBar % 2 === 0 && Math.random() < leadProb) {
         const chord = song.chords[barIdx];
         const note = chord[Math.floor(Math.random() * chord.length)];
         const oct = Math.random() < 0.25 ? song.leadOct + 1 : song.leadOct;
         blip(leadGain, nf(note, oct), when, stepDur * 1.2, 'triangle', 0.005, 0.28);
       }
-      // Drums
+      // Drums — hats every step during OVERDRIVE; otherwise off-beats only.
       if (song.kick[stepInBar]) playKick(when);
-      if (stepInBar % 2 === 1) playHat(when, 0.06);
+      const hatStep = intense ? 0 : 1;     // 0 = every step lights a hat
+      if (stepInBar % 2 === hatStep) playHat(when, 0.06);
       if (stepInBar === 4 || stepInBar === 12) playHat(when, 0.15); // snare-ish
+      // Extra kick on the off-beat during fever for double-time drive
+      if (intense && (stepInBar === 6 || stepInBar === 14)) playKick(when);
     }
 
     function loop() {
@@ -373,6 +378,7 @@
         if (active) fadeMasterTo(targetVol(), 0.2);
       },
       toggle() { this.setMuted(!muted); return muted; },
+      setIntense(on) { intense = !!on; },
       isMuted() { return muted; },
       isPlaying() { return active; },
       // Duck the music briefly so big SFX/events punch through, then swell back.
@@ -669,6 +675,7 @@
     feverFrames = FEVER_DUR;
     feverMeter = 1;
     magnetFrames = Math.max(magnetFrames, FEVER_DUR + 30);
+    music.setIntense && music.setIntense(true);
     popText('⚡ OVERDRIVE ⚡', player.x + player.w / 2, GROUND - 220, '#ff3df0', 1.9);
     flashFrame = frame;
     glitchFrame = frame;
@@ -695,6 +702,7 @@
     feverActive = false;
     feverMeter = 0;
     feverFrames = 0;
+    music.setIntense && music.setIntense(false);
     popText('COMBO PĂSTRAT!', player.x + player.w / 2, GROUND - 200, '#19f0ff', 1.2);
     zoomPunch = Math.max(zoomPunch, 0.04);
   }
@@ -1750,6 +1758,7 @@
     feverMeter = 0;
     feverActive = false;
     feverFrames = 0;
+    if (music.setIntense) music.setIntense(false);
     updateFeverUI();
     updatePowerHud();
     updateRecordProgress();
@@ -2200,6 +2209,7 @@
     feverActive = false;
     feverMeter = 0;
     feverFrames = 0;
+    if (music.setIntense) music.setIntense(false);
     updateFeverUI();
     obstacles = obstacles.filter((o) => o.x > W * 0.55);
     powerups = powerups.filter((p) => p.x > W * 0.55);
