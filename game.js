@@ -570,6 +570,7 @@
   let ghostRec = [];   // recording from the current run (array of y values)
   let ghostPlay = [];  // best-run trajectory loaded from localStorage
   let ghostHead = 0;   // current playback index for ghostPlay
+  let ghostPassed = false; // we've passed the ghost's end this run (one-shot pop)
   function loadGhost() {
     try { const raw = readLS(SK.ghostRun, null); ghostPlay = raw ? JSON.parse(raw) : []; }
     catch (_) { ghostPlay = []; }
@@ -1675,6 +1676,7 @@
     dist = 0;
     ghostRec = [];
     ghostHead = 0;
+    ghostPassed = false;
     runCoins = 0;
     frame = 0;
     nextObstacleAt = 60;
@@ -3142,6 +3144,17 @@
       ghostRec.push(player.y);
       if (ghostRec.length > 4000) ghostRec.shift(); // cap ~40min
       ghostHead++;
+      // The instant the playback head exits the recorded ghost — you've gone
+      // farther than your past self. Mark the moment with a checkered-flag pop.
+      if (!ghostPassed && ghostPlay.length > 0 && ghostHead === ghostPlay.length) {
+        ghostPassed = true;
+        popText('🏁 DEPĂȘIT FANTOMA!', W / 2, GROUND - 230, '#c8a8ff', 1.5);
+        addRing(player.x + player.w / 2, player.y + player.h / 2, 140, '200,150,255', 30);
+        flashFrame = frame;
+        addFever(0.12);
+        if (audio.power) audio.power();
+        if (navigator.vibrate) { try { navigator.vibrate([20, 30, 60]); } catch (_) {} }
+      }
     }
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
     score += (1 + levelIdx * 0.1) * feverScoreMult() * sprintMult();
