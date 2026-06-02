@@ -1173,6 +1173,14 @@
     const any = missions.some((m) => m.done && !m.claimed);
     dot.style.display = any ? 'block' : 'none';
   }
+  // Lights up when the player can afford a NEW skin they don't already own.
+  // Encourages a shop visit the moment a milestone purchase becomes possible.
+  function updateShopBadge() {
+    const dot = document.getElementById('shopBadge');
+    if (!dot) return;
+    const any = SKINS.some((s) => !ownedSkin(s.id) && !s.adOnly && s.rankReq == null && s.cost > 0 && totalCoins >= s.cost);
+    dot.style.display = any ? 'block' : 'none';
+  }
 
   // ---------- Screen navigation ----------
   function showScreen(name) {
@@ -1268,6 +1276,7 @@
           audio.levelup();
           showToast('🎉 ' + s.name + ' deblocat', 'Skin echipat');
           renderShop();
+          updateShopBadge();
         } else {
           showToast('Nu ai destule stele', 'Îți trebuie ' + (s.cost - totalCoins) + ' ★');
         }
@@ -1904,6 +1913,7 @@
     if (reviveBtn) reviveBtn.style.display = reviveUsed ? 'none' : 'inline-block';
     if (doubleCoinsBtn) { doubleCoinsBtn.disabled = false; doubleCoinsBtn.style.display = earned > 0 ? '' : 'none'; }
     missionEvent('gameover', score);
+    updateShopBadge();
     setTimeout(() => {
       gameoverEl.classList.add('show');
       const bn = document.getElementById('bottomNav'); if (bn) bn.classList.add('show');
@@ -2000,6 +2010,7 @@
   const bottomNav = document.getElementById('bottomNav');
   if (bottomNav) bottomNav.classList.add('show');
   updateMissionsBadge();
+  updateShopBadge();
 
   // 2x coins rewarded ad
   const doubleCoinsBtn = document.getElementById('doubleCoinsBtn');
