@@ -550,7 +550,8 @@
   let scrollX = 0;
   let speed = 6;
   const baseSpeed = 4.6;
-  let gravity = 0.95;
+  const BASE_GRAVITY = 0.95;
+  let gravity = BASE_GRAVITY;
   const jumpV = -17;
 
   let score = 0;
@@ -756,17 +757,19 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
-  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'tornado'];
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'tornado'];
   function startSetpiece() {
     const type = SETPIECE_TYPES[setpieceCount % SETPIECE_TYPES.length];
     setpieceCount++;
     nextSetpieceAt += 1300;
-    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : 560;
+    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : 560;
     setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
-    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : '⚡ GAUNTLET ⚡';
-    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : '#ff3d6e';
+    // LOW-G: float section — soften gravity for a dreamy, hang-time coin harvest
+    if (type === 'lowg') gravity = BASE_GRAVITY * 0.42;
+    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : type === 'lowg' ? '🌙 LOW-G 🌙' : '⚡ GAUNTLET ⚡';
+    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : type === 'lowg' ? '#8ad8ff' : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
     flashFrame = frame;
@@ -803,6 +806,25 @@
         }
         setpiece.spawnTimer = 42 + Math.floor(rnd() * 16);
       }
+    } else if (setpiece.type === 'lowg') {
+      // Floaty harvest — tall coin arcs reachable thanks to the long hang-time,
+      // with the occasional wide-spaced hazard so it isn't a pure freebie.
+      if (setpiece.spawnTimer <= 0) {
+        const r = rnd();
+        if (r < 0.78) {
+          const baseY = GROUND - 90 - rnd() * 180;
+          const n = 4 + Math.floor(rnd() * 3);
+          for (let i = 0; i < n; i++) {
+            coinsArr.push({ x: W + 30 + i * 30, y: baseY - Math.sin((i / (n - 1)) * Math.PI) * 70, r: 14, picked: false, type: rollGem(), t: rnd() * 6.28 });
+          }
+          setpiece.spawnTimer = 26;
+        } else {
+          obstacles.push(rnd() < 0.5
+            ? { type: 'spike', x: W + 20, y: GROUND - 34, w: 36, h: 34 }
+            : { type: 'flying', x: W + 20, y: GROUND - 150, w: 56, h: 32, baseY: GROUND - 150, bobAmp: 16, bobPh: rnd() * 6.28, bobSp: 0.05 });
+          setpiece.spawnTimer = 60 + Math.floor(rnd() * 24);
+        }
+      }
     } else {
       if (setpiece.spawnTimer <= 0) {
         if (rnd() < 0.5) {
@@ -825,6 +847,12 @@
         music.duck();
         shake = Math.max(shake, 12);
         zoomPunch = Math.max(zoomPunch, 0.08);
+        audio.power();
+      } else if (setpiece.type === 'lowg') {
+        gravity = BASE_GRAVITY; // restore normal weight
+        runCoins += 60;
+        popText('+60 ★  GRAVITY ON', W / 2, GROUND - 200, '#8ad8ff', 1.4);
+        addRing(W / 2, GROUND - 120, 180, '140,210,255', 32);
         audio.power();
       }
       setpiece = null;
@@ -1520,6 +1548,7 @@
   initWeather();
 
   function reset() {
+    gravity = BASE_GRAVITY; // clear any LOW-G set-piece leftover from a prior run
     player.x = 110;
     player.y = GROUND - player.h;
     player.vy = 0;
