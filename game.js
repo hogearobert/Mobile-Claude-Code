@@ -600,6 +600,7 @@
     audio.power();
     audio.levelup();
     if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20, 40, 70]); } catch (_) {} }
+    if (!hasAch('overdrive')) unlock('overdrive');
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2;
       const v = Math.random() * 8 + 3;
@@ -850,7 +851,16 @@
     { id: 'level_3',       name: 'Glacial',             desc: 'Ajunge la nivelul 4',         reward: 40 },
     { id: 'level_6',       name: 'Călătorul cosmic',    desc: 'Ajunge la nivelul 6',         reward: 100 },
     { id: 'coins_100',     name: 'Sută de stele',       desc: 'Adună 100 de stele în total', reward: 25 },
-    { id: 'revive',        name: 'A doua șansă',        desc: 'Folosește un revive',         reward: 15 }
+    { id: 'revive',        name: 'A doua șansă',        desc: 'Folosește un revive',         reward: 15 },
+    // Expansion — new feature trophies + variety chases
+    { id: 'gem_blue',      name: 'Cristal Albastru',    desc: 'Colectează un cristal albastru', reward: 30 },
+    { id: 'gem_red',       name: 'Rubin Rar',           desc: 'Colectează un rubin (rar!)',     reward: 100 },
+    { id: 'overdrive',     name: 'OVERDRIVE',           desc: 'Declanșează OVERDRIVE',          reward: 50 },
+    { id: 'sprint_first',  name: 'Vitezomanul',         desc: 'Folosește un Sprint',            reward: 25 },
+    { id: 'spring_first',  name: 'Săritor',             desc: 'Folosește o catapultă',          reward: 25 },
+    { id: 'nm_clutch',     name: 'Sânge Rece',          desc: '10 near-miss într-un run',       reward: 80 },
+    { id: 'air_big',       name: 'Aerian',              desc: 'Bonus air-time +40 într-un salt', reward: 50 },
+    { id: 'score_10000',   name: 'Astronautul',         desc: 'Atinge 10.000 scor',             reward: 300 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
   // In-memory unlock cache — avoids a synchronous localStorage read per trophy
@@ -2085,6 +2095,7 @@
           const bonus = Math.floor(baseBonus * (1 + upgLvl('air') * 0.25));
           score += bonus * feverScoreMult();
           runAirBonus += bonus * feverScoreMult();
+          if (bonus >= 40 && !hasAch('air_big')) unlock('air_big');
           popText('+' + (bonus * feverScoreMult()) + ' AIR!', player.x + player.w / 2, GROUND - 80, '#ffe14a', 1.05);
           addRing(player.x + player.w / 2, GROUND - 18, 46, '255,225,74', 18);
           audio.coin(3);
@@ -2123,6 +2134,7 @@
           shake = Math.max(shake, 4);
           addRing(s.x + s.w / 2, GROUND, 70, '255,255,255', 20);
           popText('LAUNCH!', s.x + s.w / 2, GROUND - 90, '#fff', 1.1);
+          if (!hasAch('spring_first')) unlock('spring_first');
           for (let i = 0; i < 14; i++) {
             const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
             const v = Math.random() * 5 + 2;
@@ -2389,6 +2401,7 @@
           shake = Math.max(shake, 6);
           addFever(0.12);
           runNearMisses++;
+          if (runNearMisses >= 10 && !hasAch('nm_clutch')) unlock('nm_clutch');
         } else if (gap > 0 && gap < 18) {
           score += 10 * feverScoreMult();
           popText('APROAPE! +' + (10 * feverScoreMult()), pcx, pcy - 46, '#19f0ff', 1.0);
@@ -2396,6 +2409,7 @@
           audio.nearmiss();
           addFever(0.05);
           runNearMisses++;
+          if (runNearMisses >= 10 && !hasAch('nm_clutch')) unlock('nm_clutch');
         }
       }
     }
@@ -2417,6 +2431,8 @@
         if (gm > 1) {
           popText('+' + gain, c.x, c.y - 20, c.type === 'red' ? '#ff3df0' : '#19f0ff', 1.1);
           addRing(c.x, c.y, 44, c.type === 'red' ? '255,61,240' : '120,230,255', 24);
+          if (c.type === 'blue' && !hasAch('gem_blue')) unlock('gem_blue');
+          if (c.type === 'red' && !hasAch('gem_red')) unlock('gem_red');
         }
         const ringCol = c.type === 'red' ? '255,61,240' : c.type === 'blue' ? '120,230,255' : (feverActive ? '255,61,240' : '255,225,74');
         addRing(c.x, c.y, 30, ringCol, 18);
@@ -2471,6 +2487,7 @@
           zoomPunch = Math.max(zoomPunch, 0.06);
           shake = Math.max(shake, 5);
           music.duck();
+          if (!hasAch('sprint_first')) unlock('sprint_first');
         }
         audio.power && audio.power();
         missionEvent('powerup');
@@ -2524,6 +2541,7 @@
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
     if (score >= 2000 && !hasAch('score_2000')) unlock('score_2000');
     if (score >= 5000 && !hasAch('score_5000')) unlock('score_5000');
+    if (score >= 10000 && !hasAch('score_10000')) unlock('score_10000');
     if (combo >= 10 && !hasAch('combo_10')) unlock('combo_10');
     if (combo >= 20 && !hasAch('combo_20')) unlock('combo_20');
     if (magnetFrames > 0 && !hasAch('magnet')) unlock('magnet');
@@ -2614,7 +2632,12 @@
     const cx = W * 0.78;
     const cy = GROUND - 280;
     const sunR = 48;
-    const pulse = 1 + Math.sin(frame * 0.04) * 0.025;
+    // During OVERDRIVE the synthwave sun pulses harder + larger — the iconic
+    // backdrop literally throbs with the multiplier. Subtle in normal play
+    // (±2.5%), dramatic during fever (±9%).
+    const pulse = feverActive
+      ? 1 + Math.sin(frame * 0.18) * 0.09
+      : 1 + Math.sin(frame * 0.04) * 0.025;
     const R = sunR * pulse;
 
     // Outer atmospheric glow (3 stacked halos, additive)
