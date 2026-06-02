@@ -1976,6 +1976,24 @@
     const slideTarget = player.sliding && player.onGround ? 1 : 0;
     player.slideT += (slideTarget - player.slideT) * 0.35;
 
+    // Running dust — tiny motes kicked up from under the orb at speed. Density
+    // ramps in smoothly above speed 6.5; capped at one mote per other-frame so
+    // it never starves the shared particle pool. Goes hot-pink during OVERDRIVE
+    // so the trail visibly screams the multiplier.
+    if (player.onGround && !player.sliding && speed > 6.5 && (frame & 1) === 0) {
+      const intensity = Math.min(1, (speed - 6.5) / 7);
+      if (Math.random() < intensity * 0.7) {
+        const col = feverActive ? 'rgba(255, 180, 255, 0.55)' : 'rgba(210, 220, 240, 0.5)';
+        pushParticle(
+          player.x + player.w / 2 + (Math.random() - 0.5) * 12,
+          GROUND - 2,
+          -(2.5 + Math.random() * 3.5),
+          -Math.random() * 1.4,
+          20, col, 0.9 + Math.random() * 1.5
+        );
+      }
+    }
+
     // Trail
     if (frame % 2 === 0) {
       player.trail.push({ x: player.x + player.w / 2, y: player.y + player.h / 2, life: 20 });
