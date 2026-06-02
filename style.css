@@ -357,6 +357,25 @@ html, body {
   padding: 12px 32px;
   margin-top: 4px;
 }
+.end-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: stretch;
+  margin-top: 4px;
+}
+.end-row .btn { margin: 0; flex: 1 1 0; min-width: 0; padding: 12px 12px; }
+.btn.ghost {
+  background: rgba(11, 16, 32, 0.55);
+  color: var(--text);
+  border: 1px solid rgba(255, 61, 240, 0.35);
+  box-shadow: 0 0 14px rgba(255, 61, 240, 0.15);
+  font-size: 13px;
+}
+.btn.ghost:hover, .btn.ghost:focus-visible {
+  border-color: rgba(255, 61, 240, 0.7);
+  box-shadow: 0 0 22px rgba(255, 61, 240, 0.4);
+}
 
 .ad-hint {
   font-size: 10px;

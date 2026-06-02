@@ -2028,6 +2028,23 @@
     startGame();
   });
 
+  // Share button — Web Share API on supported browsers, clipboard fallback
+  const shareBtn = document.getElementById('shareBtn');
+  if (shareBtn) shareBtn.addEventListener('click', async () => {
+    audio.resume();
+    const txt = '🌌 Am făcut ' + score + ' puncte în Glitch Run! Poți să mă bați?';
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Glitch Run', text: txt, url: location.href });
+        return;
+      }
+    } catch (_) { /* user cancelled, fall through */ }
+    try {
+      await navigator.clipboard.writeText(txt + ' ' + location.href);
+      showToast('Copiat!', 'Scorul tău e în clipboard — lipește unde vrei');
+    } catch (_) { showToast('Hmm', 'Browser-ul tău nu permite share automat'); }
+  });
+
   const muteBtn = document.getElementById('muteBtn');
   const pauseBtn = document.getElementById('pauseBtn');
   const levelEl = document.getElementById('level');

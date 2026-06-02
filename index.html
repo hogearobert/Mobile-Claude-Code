@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=95" />
+  <link rel="stylesheet" href="style.css?v=96" />
 </head>
 <body>
   <div id="app">
@@ -108,7 +108,10 @@
         <button id="reviveBtn" class="btn revive">▶ REVIVE GRATUIT</button>
         <button id="doubleCoinsBtn" class="btn double-coins">💰 2× STELE</button>
         <p class="ad-hint">Vezi o reclamă scurtă pentru recompensă</p>
-        <button id="retryBtn" class="btn secondary">REJOACĂ</button>
+        <div class="end-row">
+          <button id="shareBtn" class="btn ghost share" aria-label="Distribuie scorul">📤 DISTRIBUIE</button>
+          <button id="retryBtn" class="btn secondary">REJOACĂ</button>
+        </div>
       </div>
     </div>
 
@@ -197,7 +200,7 @@
 
   </div>
 
-  <script src="game.js?v=95"></script>
+  <script src="game.js?v=96"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT
