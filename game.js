@@ -1008,6 +1008,24 @@
       coinsEl.textContent = totalCoins;
     }
     showToast('🏆 ' + a.name, a.desc + (a.reward ? '  ·  +' + a.reward + ' ★' : ''));
+    // In-game spectacle when unlocking mid-run — a confetti burst + ring +
+    // ding so the moment lands instead of just a quiet toast at the corner.
+    if (state === STATE.PLAY) {
+      const cx = player.x + player.w / 2;
+      const cy = player.y + player.h / 2;
+      addRing(cx, cy, 130, '255,225,74', 28);
+      addRing(cx, cy, 90, '255,255,255', 22);
+      addFever(0.06);
+      for (let i = 0; i < 28; i++) {
+        const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.4;
+        const v = Math.random() * 7 + 3;
+        pushParticle(cx, cy, Math.cos(ang) * v, Math.sin(ang) * v, 60,
+          ['#ffe14a', '#ff3df0', '#19f0ff', '#fff'][i & 3], Math.random() * 3 + 1.5);
+      }
+      flashFrame = frame;
+      audio.power && audio.power();
+      if (navigator.vibrate) { try { navigator.vibrate([15, 30, 60]); } catch (_) {} }
+    }
   }
   // ---------- Skins (cosmetic progression unlocked with stars) ----------
   const SKINS = [
