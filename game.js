@@ -557,6 +557,8 @@
   let powerups = [];
   let magnetFrames = 0;
   let shieldActive = false;
+  let sprintFrames = 0;
+  function sprintMult() { return sprintFrames > 0 ? 1.5 : 1; }
   let shieldFlashFrame = -1000;
   let invincibleUntil = -1;
   let reviveUsed = false;
@@ -1328,6 +1330,7 @@
     powerups = [];
     magnetFrames = 0;
     shieldActive = false;
+    sprintFrames = 0;
     shieldFlashFrame = -1000;
     invincibleUntil = -1;
     reviveUsed = false;
@@ -1335,6 +1338,7 @@
     feverActive = false;
     feverFrames = 0;
     updateFeverUI();
+    updatePowerHud();
     texts = [];
     slowmoFrames = 0;
     flashFrame = -1000;
@@ -1614,6 +1618,28 @@
   const comboFillEl = document.getElementById('comboFill');
   const feverBarEl = document.getElementById('feverBar');
   const feverFillEl = document.getElementById('feverFill');
+  const pwMagnetEl = document.getElementById('pwMagnet');
+  const pwShieldEl = document.getElementById('pwShield');
+  const pwSprintEl = document.getElementById('pwSprint');
+  function updatePowerHud() {
+    if (pwMagnetEl) {
+      const on = magnetFrames > 0;
+      pwMagnetEl.classList.toggle('hidden', !on);
+      if (on) {
+        const f = pwMagnetEl.querySelector('.pf');
+        if (f) f.style.transform = 'scaleX(' + Math.min(1, magnetFrames / (60 * 8)) + ')';
+      }
+    }
+    if (pwShieldEl) pwShieldEl.classList.toggle('hidden', !shieldActive);
+    if (pwSprintEl) {
+      const on = sprintFrames > 0;
+      pwSprintEl.classList.toggle('hidden', !on);
+      if (on) {
+        const f = pwSprintEl.querySelector('.pf');
+        if (f) f.style.transform = 'scaleX(' + Math.min(1, sprintFrames / (60 * 5)) + ')';
+      }
+    }
+  }
   function setComboUI(text) {
     if (comboTextEl) comboTextEl.textContent = text || '';
     if (comboEl) comboEl.classList.toggle('hidden', !text);
@@ -1815,7 +1841,7 @@
   }
 
   function spawnPowerup() {
-    const types = ['magnet', 'shield'];
+    const types = ['magnet', 'shield', 'sprint'];
     const t = types[Math.floor(rnd() * types.length)];
     const p = {
       type: t,
@@ -1918,7 +1944,10 @@
     if (slowmoFrames > 0) slowmoFrames--;
     // Gentle ramp spread across all 12 levels: ~4.6 at start, reaches the
     // 15 cap only around score ~4780 (level 10). Levels 11-12 hold max intensity.
-    speed = (baseSpeed + Math.min(dist / 520, 10.4)) * slowmoT;
+    // SPRINT multiplies *visual* speed (1.3x) — pacing/dist still ticks at
+    // the normal rate so spawn rhythm stays fair while the screen feels nitro.
+    const sprintBoost = sprintFrames > 0 ? 1.3 : 1;
+    speed = (baseSpeed + Math.min(dist / 520, 10.4)) * slowmoT * sprintBoost;
     scrollX += speed;
     updateWeather();
     if (landBounce > 0.01) landBounce *= 0.8; else landBounce = 0;
@@ -2092,6 +2121,7 @@
 
     // Decay magnet
     if (magnetFrames > 0) magnetFrames--;
+    if (sprintFrames > 0) sprintFrames--;
     // Combo decay + live meter fill (drains as the window runs out)
     if (combo > 0) {
       if (frame - lastCoinFrame > comboWindow()) {
@@ -2243,7 +2273,7 @@
         else combo = 1;
         lastCoinFrame = frame;
         const m = comboMult();
-        score += 5 * m * feverScoreMult();
+        score += 5 * m * feverScoreMult() * sprintMult();
         audio.coin(combo - 1);
         addRing(c.x, c.y, 30, feverActive ? '255,61,240' : '255,225,74', 18);
         setComboUI(combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '');
@@ -2287,10 +2317,17 @@
           shieldActive = true;
           popText('SHIELD', p.x, p.y - 20, '#19f0ff', 1.2);
           addRing(p.x, p.y, 70, '25,240,255', 28);
+        } else if (p.type === 'sprint') {
+          sprintFrames = 60 * 5;
+          popText('SPRINT 5s', p.x, p.y - 20, '#fff', 1.3);
+          addRing(p.x, p.y, 80, '255,255,255', 30);
+          zoomPunch = Math.max(zoomPunch, 0.06);
+          shake = Math.max(shake, 5);
+          music.duck();
         }
         audio.power && audio.power();
         missionEvent('powerup');
-        const pcol = p.type === 'magnet' ? '#ffe14a' : '#19f0ff';
+        const pcol = p.type === 'magnet' ? '#ffe14a' : p.type === 'shield' ? '#19f0ff' : '#fff';
         for (let i = 0; i < 16; i++) {
           const a = Math.random() * Math.PI * 2;
           const v = Math.random() * 4 + 2;
@@ -2304,12 +2341,12 @@
       magnetFrames = Math.max(magnetFrames, 2);
       if (--feverFrames <= 0) endFever();
     }
-    if (frame % 2 === 0) updateFeverUI();
+    if (frame % 2 === 0) { updateFeverUI(); updatePowerHud(); }
 
     // dist drives all pacing (level / speed / spawns) — steady, coin-independent.
     dist += 1;
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
-    score += (1 + levelIdx * 0.1) * feverScoreMult();
+    score += (1 + levelIdx * 0.1) * feverScoreMult() * sprintMult();
     tryLevelUp();
     // Achievements (use >= because combo multipliers can skip exact values)
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
@@ -2621,6 +2658,25 @@
     const cy = (player.y + player.h / 2) + ((GROUND - 16) - (player.y + player.h / 2)) * sT + groundedBob;
     const baseR = 22;
 
+    // SPRINT jet-stream — big bright horizontal streak trailing the orb during
+    // the boost. Drawn first so the orb sits on top of its own exhaust.
+    if (sprintFrames > 0) {
+      const intensity = Math.min(1, sprintFrames / 30);
+      const len = 120 + Math.sin(frame * 0.6) * 18;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const jet = ctx.createLinearGradient(cx - len, cy, cx + 4, cy);
+      jet.addColorStop(0, 'rgba(255,255,255,0)');
+      jet.addColorStop(0.5, 'rgba(255,255,255,' + (0.20 * intensity).toFixed(3) + ')');
+      jet.addColorStop(0.85, 'rgba(' + sk.trail + ',' + (0.55 * intensity).toFixed(3) + ')');
+      jet.addColorStop(1, 'rgba(255,255,255,' + (0.7 * intensity).toFixed(3) + ')');
+      ctx.fillStyle = jet;
+      ctx.beginPath();
+      ctx.ellipse(cx - len / 2, cy, len / 2, 12 + 4 * intensity, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Motion smears — short horizontal streaks trailing behind the orb when
     // running fast (speed > 8). Sells the speed without spamming particles.
     if (player.onGround && speed > 8 && sT < 0.4) {
@@ -2848,7 +2904,9 @@
       const py = p.y + float;
       // glow
       const g = ctx.createRadialGradient(px, py, 0, px, py, p.r * 1.8);
-      const col = p.type === 'magnet' ? '255, 225, 74' : '25, 240, 255';
+      const col = p.type === 'magnet' ? '255, 225, 74'
+                : p.type === 'shield' ? '25, 240, 255'
+                : '255, 255, 255';
       g.addColorStop(0, 'rgba(' + col + ', 0.6)');
       g.addColorStop(1, 'rgba(' + col + ', 0)');
       ctx.fillStyle = g;
@@ -2861,7 +2919,7 @@
       ctx.font = 'bold 22px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(p.type === 'magnet' ? '🧲' : '🛡', px, py + 2);
+      ctx.fillText(p.type === 'magnet' ? '🧲' : p.type === 'shield' ? '🛡' : '⚡', px, py + 2);
     }
   }
 
