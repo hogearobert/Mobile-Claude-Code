@@ -3692,6 +3692,19 @@
       ctx.beginPath();
       ctx.arc(gcx, gcy, pr, 0, Math.PI * 2);
       ctx.stroke();
+      // Chromatic split echoes — short cyan/magenta horizontal slices behind
+      // the orb, jittering each frame. Sells the "out of phase" effect by
+      // RGB-splitting the silhouette itself instead of just the aura.
+      const split = 3 + Math.sin(frame * 0.5) * 1.5;
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = 'rgba(25,240,255,' + (0.4 * fade) + ')';
+      ctx.beginPath();
+      ctx.arc(gcx - split, gcy + 1.5, 20, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,61,240,' + (0.4 * fade) + ')';
+      ctx.beginPath();
+      ctx.arc(gcx + split, gcy - 1.5, 20, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
     }
 
