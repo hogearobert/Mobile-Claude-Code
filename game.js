@@ -768,7 +768,7 @@
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
     // LOW-G: float section — soften gravity for a dreamy, hang-time coin harvest
-    if (type === 'lowg') gravity = BASE_GRAVITY * 0.42;
+    if (type === 'lowg') { gravity = BASE_GRAVITY * 0.42; showTipOnce('lowg', '🌙 LOW-G', 'Gravitație redusă — sari mult mai sus!'); }
     const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : type === 'lowg' ? '🌙 LOW-G 🌙' : '⚡ GAUNTLET ⚡';
     const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : type === 'lowg' ? '#8ad8ff' : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
@@ -1329,6 +1329,13 @@
     toastEl.classList.add('show');
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => toastEl.classList.remove('show'), 3500);
+  }
+  // One-time contextual tip — teaches a new mechanic the first time it appears.
+  function showTipOnce(key, title, desc) {
+    const k = NS + 'tip.' + key;
+    if (readLS(k, '0') === '1') return;
+    writeLS(k, '1');
+    showToast(title, desc);
   }
 
   // ---------- Init parallax ----------
@@ -2894,6 +2901,7 @@
           shake = Math.max(shake, 7);
           music.duck();
           missionEvent('phase');
+          showTipOnce('phase', '👻 PHASE', 'Treci prin obstacole — fără frică!');
           if (!hasAch('phase_first')) unlock('phase_first');
         }
         audio.power && audio.power();
