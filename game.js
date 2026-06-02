@@ -575,6 +575,7 @@
   let runAirBonus = 0;
   let runXpBanked = 0; // XP already credited this run (prevents double-count on revive)
   let recordBrokenThisRun = false;
+  let nextScoreMilestone = 2500; // next big-score celebration threshold
 
   // ---------- Levels (palette + difficulty) ----------
   const LEVELS = [
@@ -1610,6 +1611,7 @@
     runAirBonus = 0;
     runXpBanked = 0;
     recordBrokenThisRun = false;
+    nextScoreMilestone = 2500;
     levelIdx = 0;
     palette = LEVELS[0];
     skyGradient = null;
@@ -2951,6 +2953,23 @@
           ['#ffe14a', '#ff3df0', '#19f0ff', '#fff'][i % 4], Math.random() * 4 + 2);
       }
       if (navigator.vibrate) { try { navigator.vibrate([40, 80, 40, 80, 200]); } catch (_) {} }
+    }
+    // Score milestones — a celebratory beat + small star bonus every 2500 pts,
+    // giving long runs rhythm independent of biome level-ups. One fire per
+    // threshold even if a coin burst leaps past several at once.
+    if (score >= nextScoreMilestone) {
+      const ms = Math.floor(score / 2500) * 2500;
+      nextScoreMilestone = ms + 2500;
+      const bonus = 10 + Math.floor(ms / 2500) * 5;
+      runCoins += bonus;
+      popText('🔥 ' + ms + '!  +' + bonus + ' ★', W / 2, GROUND - 230, '#ffe14a', 1.6);
+      flashFrame = frame;
+      zoomPunch = Math.max(zoomPunch, 0.06);
+      shake = Math.max(shake, 6);
+      addRing(W / 2, GROUND - 130, 240, '255,225,74', 40);
+      addFever(0.15);
+      audio.power && audio.power();
+      if (navigator.vibrate) { try { navigator.vibrate([20, 40, 80]); } catch (_) {} }
     }
     // Achievements (use >= because combo multipliers can skip exact values)
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
