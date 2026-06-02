@@ -902,7 +902,8 @@
     { id: 'cosmic',  name: 'COSMIC',  cost: 3500, locked: true,  core:['#fff','#e0d0ff','#b04dff','#3a0a8c'], halo:['rgba(180,80,255,0.55)','rgba(120,40,255,0.25)'], ring:'rgba(200,120,255,0.75)', trail:'180,100,255', perk:{ type:'magnet',  val:3,    label:'Start cu 3s magnet' } },
     { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, animated: true, core:['#fff','#ffd0ff','#ff3df0','#5a0a8c'], halo:['rgba(255,61,240,0.6)','rgba(180,40,200,0.22)'], ring:'rgba(255,200,255,0.85)', trail:'255,140,255', perk:{ type:'feverNm', val:0.04, label:'+OVERDRIVE per near-miss' } },
     { id: 'nebula',  name: 'NEBULA',  cost: 2200, locked: true, core:['#fff','#e8d8ff','#a874ff','#3a1a7a'], halo:['rgba(180,120,255,0.55)','rgba(120,80,220,0.22)'], ring:'rgba(220,180,255,0.8)', trail:'180,130,255', perk:{ type:'sprint',  val:2,    label:'+2s la Sprint' } },
-    { id: 'aurora',  name: 'AURORA',  cost: 4500, locked: true, core:['#fff','#ccffe8','#3dffd0','#0a6e5a'], halo:['rgba(100,255,210,0.6)','rgba(60,200,255,0.22)'], ring:'rgba(140,255,220,0.8)', trail:'100,255,210', perk:{ type:'coin',    val:1,    label:'+1 stea / coin' } }
+    { id: 'aurora',  name: 'AURORA',  cost: 4500, locked: true, core:['#fff','#ccffe8','#3dffd0','#0a6e5a'], halo:['rgba(100,255,210,0.6)','rgba(60,200,255,0.22)'], ring:'rgba(140,255,220,0.8)', trail:'100,255,210', perk:{ type:'coin',    val:1,    label:'+1 stea / coin' } },
+    { id: 'titan',   name: 'TITAN',   cost: 6000, locked: true, core:['#fff','#ffe0b0','#ff8a1e','#7a3200'], halo:['rgba(255,140,40,0.6)','rgba(255,80,20,0.25)'],   ring:'rgba(255,170,90,0.8)',  trail:'255,150,60',  perk:{ type:'slam',    val:0.7,  label:'+70% rază Dive-Slam' } }
   ];
   function perkVal(type) {
     const sk = currentSkin();
@@ -1970,6 +1971,8 @@
     { id: 'double_slide', minScore: 820, span: 300, obs: [{ t: 'overhang', dx: 0 }, { t: 'overhang', dx: 300 }], coins: { dx: 0, lowArc: true } },
     { id: 'flyer_pair', minScore: 1000, span: 360, obs: [{ t: 'flying', dx: 0 }, { t: 'flying', dx: 360 }], coins: { dx: 120, lowArc: true } },
     { id: 'weave',      minScore: 1300, span: 680, obs: [{ t: 'spike', dx: 0 }, { t: 'overhang', dx: 220 }, { t: 'spike', dx: 440 }, { t: 'overhang', dx: 680 }] },
+    // Spike field — clear it spike-by-spike, or jump high and Dive-Slam the cluster
+    { id: 'spike_field', minScore: 1600, span: 200, obs: [{ t: 'spike', dx: 0 }, { t: 'spike', dx: 100 }, { t: 'spike', dx: 200 }], coins: { dx: 60, arc: true } },
     // Jump-pad patterns — the high coin arcs are only reachable via the spring,
     // so the player has to commit to the launch to claim the reward.
     { id: 'spring_high',  minScore: 400, span: 220, obs: [], spring: { dx: 30 }, coins: { dx: 30, springArc: true } },
@@ -2167,7 +2170,7 @@
     const cx = player.x + player.w / 2;
     const cyP = player.y + player.h / 2;
     const pr = player.w / 2;
-    const R = Math.min(170, 92 + power * 3);
+    const R = Math.min(170, 92 + power * 3) * (1 + perkVal('slam')); // TITAN skin widens the wave
     let destroyed = 0;
     for (const o of obstacles) {
       if (o.x < -100) continue;
