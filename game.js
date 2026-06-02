@@ -2838,12 +2838,25 @@
         setComboUI(combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '');
         if (combo > runMaxCombo) runMaxCombo = combo;
         addFever(0.035);
-        if (combo === 5 || combo === 10 || combo === 15 || combo === 20 || combo === 30) {
-          popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
-          shake = Math.max(shake, 4);
-          addRing(c.x, c.y, 50, '255,225,74', 22);
+        if (combo === 5 || combo === 10 || combo === 15 || combo === 20 || combo === 30 || combo === 50) {
+          // Escalating, named combo tiers — each milestone feels distinctly
+          // bigger than the last instead of repeating "N COMBO!".
+          const tier = combo >= 50 ? { name: 'LEGENDARY!',  col: '#ff3df0', sz: 2.2, sh: 16, rings: 3, fever: 0.22 }
+                     : combo >= 30 ? { name: 'GODLIKE!',    col: '#ff3df0', sz: 1.9, sh: 13, rings: 2, fever: 0.16 }
+                     : combo >= 20 ? { name: 'UNSTOPPABLE!', col: '#ffe14a', sz: 1.6, sh: 10, rings: 2, fever: 0.12 }
+                     : combo >= 15 ? { name: 'ON FIRE!',    col: '#ffe14a', sz: 1.4, sh:  7, rings: 1, fever: 0.10 }
+                     : combo >= 10 ? { name: 'HOT! ' + combo, col: '#ff7a3d', sz: 1.25, sh: 6, rings: 1, fever: 0.09 }
+                     :               { name: combo + ' COMBO!', col: palette.sun, sz: 1.1, sh: 4, rings: 1, fever: 0.08 };
+          popText(tier.name, c.x, c.y - 24, tier.col, tier.sz);
+          shake = Math.max(shake, tier.sh);
+          for (let k = 0; k < tier.rings; k++) addRing(c.x, c.y, 50 + k * 24, '255,225,74', 22 + k * 6);
           missionEvent('combo', combo);
-          addFever(0.08);
+          addFever(tier.fever);
+          // Big tiers get a screen flash + slow-mo flicker so they READ
+          if (combo >= 15) { flashFrame = frame; }
+          if (combo >= 20) { slowmoFrames = Math.max(slowmoFrames, 8); zoomPunch = Math.max(zoomPunch, 0.05); }
+          if (combo >= 30) { glitchFrame = frame; zoomPunch = Math.max(zoomPunch, 0.08); }
+          if (navigator.vibrate && combo >= 15) { try { navigator.vibrate([10, 20, 40]); } catch (_) {} }
         }
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * Math.PI * 2;
@@ -3161,10 +3174,25 @@
       ctx.lineWidth = 1;
       ctx.strokeRect(b.x + 0.5, GROUND - b.h + 0.5, b.w - 1, b.h - 1);
       if (b.windows) {
-        ctx.fillStyle = 'rgba(255, 225, 74, 0.55)';
+        // Window grid with deterministic per-cell seed → some are unlit, some
+        // are warm/cool tinted, and a few flicker on a slow tick so the city
+        // visibly breathes instead of holding a static checkerboard.
+        const flickerTick = Math.floor(frame / 18);
         for (let wy = GROUND - b.h + 12; wy < GROUND - 20; wy += 14) {
           for (let wx = b.x + 6; wx < b.x + b.w - 6; wx += 12) {
-            if ((wx + wy) % 28 < 14) ctx.fillRect(wx, wy, 5, 6);
+            // Stable per-window hash → who's lit at all (keeps city pattern stable)
+            const seed = ((wx * 73856093) ^ (wy * 19349663)) >>> 0;
+            if (seed % 100 < 38) continue; // ~62% of cells are dark walls
+            // Slow flicker: a small fraction toggles each tick
+            if (((seed ^ flickerTick) % 47) < 4) continue;
+            // Warm yellow vs cool cyan vs hot pink (rare) — biome-agnostic city
+            const tone = seed % 100;
+            const col = tone < 70 ? '255, 225, 74'
+                      : tone < 92 ? '120, 230, 255'
+                      :             '255, 80, 220';
+            const a = 0.45 + ((seed >> 4) % 30) / 100; // 0.45..0.75
+            ctx.fillStyle = 'rgba(' + col + ',' + a + ')';
+            ctx.fillRect(wx, wy, 5, 6);
           }
         }
       }
@@ -3288,6 +3316,41 @@
       ctx.fill();
       ctx.restore();
     }
+    // High-combo electric crackle — short jagged arcs flickering around the
+    // orb at combo ≥ 10. Reads instantly as "you're in the zone". Arc count
+    // and brightness scale with the tier the player is currently holding.
+    if (combo >= 10) {
+      const acx = player.x + player.w / 2;
+      const acy = player.y + player.h / 2;
+      const arcN = combo >= 30 ? 5 : combo >= 20 ? 4 : combo >= 15 ? 3 : 2;
+      const hot = combo >= 30 ? '255,61,240' : combo >= 20 ? '255,140,60' : '255,225,74';
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(' + hot + ',0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < arcN; i++) {
+        const baseA = (frame * 0.13 + i * 2.094) % (Math.PI * 2);
+        const r0 = 24 + (i % 2) * 4;
+        const r1 = r0 + 14 + Math.random() * 10;
+        let x = acx + Math.cos(baseA) * r0;
+        let y = acy + Math.sin(baseA) * r0;
+        const segs = 3;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let s = 1; s <= segs; s++) {
+          const t = s / segs;
+          const ang = baseA + (Math.random() - 0.5) * 0.6;
+          const r = r0 + (r1 - r0) * t;
+          x = acx + Math.cos(ang) * r;
+          y = acy + Math.sin(ang) * r;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Trail — soft glow without shadowBlur (skin-tinted)
     for (let i = 0; i < player.trail.length; i++) {
       const t = player.trail[i];
