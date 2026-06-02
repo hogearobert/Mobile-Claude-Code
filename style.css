@@ -658,6 +658,15 @@ html, body {
 .skin-cost.owned { color: var(--neon-cyan); }
 .skin-cost.equipped { color: var(--neon-yellow); }
 .skin-cost.ad::before { content: '▶ '; }
+.skin-perk {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--neon-cyan);
+  opacity: 0.85;
+  margin: 2px 0 4px;
+  line-height: 1.2;
+}
 
 /* Upgrade cards — the persistent-progression UI in the shop */
 .upgrade-list {

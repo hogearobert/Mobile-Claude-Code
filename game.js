@@ -555,7 +555,7 @@
   let combo = 0;
   let lastCoinFrame = -1000;
   // Window scales with combo: tight when cold (0.8s), generous when hot (2.5s).
-  function comboWindow() { return Math.round((48 + Math.min(combo, 15) * 7) * (1 + upgLvl('combo') * 0.15)); }
+  function comboWindow() { return Math.round((48 + Math.min(combo, 15) * 7) * (1 + upgLvl('combo') * 0.15) * (1 + perkVal('combo'))); }
   function comboMult() { return combo >= 15 ? 4 : combo >= 10 ? 3 : combo >= 5 ? 2 : 1; }
 
   // ---------- Power-ups ----------
@@ -886,15 +886,19 @@
   }
   // ---------- Skins (cosmetic progression unlocked with stars) ----------
   const SKINS = [
-    { id: 'cyan',    name: 'CYAN',    cost: 0,    locked: false, core:['#fff','#a8f6ff','#19f0ff','#0b94ad'], halo:['rgba(120,230,255,0.55)','rgba(255,80,220,0.18)'], ring:'rgba(255,90,220,0.6)',  trail:'120,230,255' },
-    { id: 'plasma',  name: 'PLASMA',  cost: 200,  locked: true,  core:['#fff','#caffd2','#3dff7a','#0a4d20'], halo:['rgba(100,255,180,0.55)','rgba(180,255,100,0.2)'], ring:'rgba(120,255,180,0.7)', trail:'100,255,180' },
-    { id: 'solar',   name: 'SOLAR',   cost: 500,  locked: true,  core:['#fff','#fff5d0','#ffd64a','#a86b00'], halo:['rgba(255,225,100,0.6)','rgba(255,120,40,0.25)'], ring:'rgba(255,200,80,0.75)', trail:'255,225,100' },
-    { id: 'crimson', name: 'CRIMSON', cost: 1500, locked: true,  core:['#fff','#ffcad0','#ff3d6e','#8a0a20'], halo:['rgba(255,80,120,0.55)','rgba(255,40,60,0.25)'],  ring:'rgba(255,120,140,0.75)', trail:'255,100,140' },
-    { id: 'cosmic',  name: 'COSMIC',  cost: 3500, locked: true,  core:['#fff','#e0d0ff','#b04dff','#3a0a8c'], halo:['rgba(180,80,255,0.55)','rgba(120,40,255,0.25)'], ring:'rgba(200,120,255,0.75)', trail:'180,100,255' },
-    { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, animated: true, core:['#fff','#ffd0ff','#ff3df0','#5a0a8c'], halo:['rgba(255,61,240,0.6)','rgba(180,40,200,0.22)'], ring:'rgba(255,200,255,0.85)', trail:'255,140,255' },
-    { id: 'nebula',  name: 'NEBULA',  cost: 2200, locked: true, core:['#fff','#e8d8ff','#a874ff','#3a1a7a'], halo:['rgba(180,120,255,0.55)','rgba(120,80,220,0.22)'], ring:'rgba(220,180,255,0.8)', trail:'180,130,255' },
-    { id: 'aurora',  name: 'AURORA',  cost: 4500, locked: true, core:['#fff','#ccffe8','#3dffd0','#0a6e5a'], halo:['rgba(100,255,210,0.6)','rgba(60,200,255,0.22)'], ring:'rgba(140,255,220,0.8)', trail:'100,255,210' }
+    { id: 'cyan',    name: 'CYAN',    cost: 0,    locked: false, core:['#fff','#a8f6ff','#19f0ff','#0b94ad'], halo:['rgba(120,230,255,0.55)','rgba(255,80,220,0.18)'], ring:'rgba(255,90,220,0.6)',  trail:'120,230,255', perk:{ type:'combo',   val:0.10, label:'+10% fereastră combo' } },
+    { id: 'plasma',  name: 'PLASMA',  cost: 200,  locked: true,  core:['#fff','#caffd2','#3dff7a','#0a4d20'], halo:['rgba(100,255,180,0.55)','rgba(180,255,100,0.2)'], ring:'rgba(120,255,180,0.7)', trail:'100,255,180', perk:{ type:'air',     val:0.20, label:'+20% bonus air-time' } },
+    { id: 'solar',   name: 'SOLAR',   cost: 500,  locked: true,  core:['#fff','#fff5d0','#ffd64a','#a86b00'], halo:['rgba(255,225,100,0.6)','rgba(255,120,40,0.25)'], ring:'rgba(255,200,80,0.75)', trail:'255,225,100', perk:{ type:'gem',     val:0.5,  label:'+50% șansă gem' } },
+    { id: 'crimson', name: 'CRIMSON', cost: 1500, locked: true,  core:['#fff','#ffcad0','#ff3d6e','#8a0a20'], halo:['rgba(255,80,120,0.55)','rgba(255,40,60,0.25)'],  ring:'rgba(255,120,140,0.75)', trail:'255,100,140', perk:{ type:'nm',      val:15,   label:'+15 scor / near-miss' } },
+    { id: 'cosmic',  name: 'COSMIC',  cost: 3500, locked: true,  core:['#fff','#e0d0ff','#b04dff','#3a0a8c'], halo:['rgba(180,80,255,0.55)','rgba(120,40,255,0.25)'], ring:'rgba(200,120,255,0.75)', trail:'180,100,255', perk:{ type:'magnet',  val:3,    label:'Start cu 3s magnet' } },
+    { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, animated: true, core:['#fff','#ffd0ff','#ff3df0','#5a0a8c'], halo:['rgba(255,61,240,0.6)','rgba(180,40,200,0.22)'], ring:'rgba(255,200,255,0.85)', trail:'255,140,255', perk:{ type:'feverNm', val:0.04, label:'+OVERDRIVE per near-miss' } },
+    { id: 'nebula',  name: 'NEBULA',  cost: 2200, locked: true, core:['#fff','#e8d8ff','#a874ff','#3a1a7a'], halo:['rgba(180,120,255,0.55)','rgba(120,80,220,0.22)'], ring:'rgba(220,180,255,0.8)', trail:'180,130,255', perk:{ type:'sprint',  val:2,    label:'+2s la Sprint' } },
+    { id: 'aurora',  name: 'AURORA',  cost: 4500, locked: true, core:['#fff','#ccffe8','#3dffd0','#0a6e5a'], halo:['rgba(100,255,210,0.6)','rgba(60,200,255,0.22)'], ring:'rgba(140,255,220,0.8)', trail:'100,255,210', perk:{ type:'coin',    val:1,    label:'+1 stea / coin' } }
   ];
+  function perkVal(type) {
+    const sk = currentSkin();
+    return sk && sk.perk && sk.perk.type === type ? sk.perk.val : 0;
+  }
   function ownedSkin(id) {
     if (id === 'cyan') return true;
     return readLS(SK.skinUnlocked + '.' + id, '0') === '1';
@@ -1025,6 +1029,12 @@
 
       div.appendChild(previewEl);
       div.appendChild(nameEl);
+      if (s.perk && s.perk.label) {
+        const perkEl = document.createElement('div');
+        perkEl.className = 'skin-perk';
+        perkEl.textContent = '✦ ' + s.perk.label;
+        div.appendChild(perkEl);
+      }
       div.appendChild(costEl);
 
       div.addEventListener('click', () => {
@@ -1409,7 +1419,8 @@
     lastCoinFrame = -1000;
     powerups = [];
     springs = [];
-    magnetFrames = 0;
+    // COSMIC skin: kick off the run with a free magnet window
+    magnetFrames = 60 * perkVal('magnet');
     shieldActive = false;
     sprintFrames = 0;
     shieldFlashFrame = -1000;
@@ -1868,8 +1879,9 @@
   // so the daily challenge stays fully deterministic.
   function rollGem() {
     const r = rnd();
-    if (r < 0.02) return 'red';
-    if (r < 0.12) return 'blue';
+    const boost = 1 + perkVal('gem'); // SOLAR skin: +50% gem chance
+    if (r < 0.02 * boost) return 'red';
+    if (r < 0.12 * boost) return 'blue';
     return 'star';
   }
   function gemMult(t) { return t === 'red' ? 10 : t === 'blue' ? 5 : 1; }
@@ -2092,7 +2104,7 @@
         // since airframes counts continuous time off the floor)
         if (airframes > 35) {
           const baseBonus = Math.min(60, Math.floor(airframes / 1.2));
-          const bonus = Math.floor(baseBonus * (1 + upgLvl('air') * 0.25));
+          const bonus = Math.floor(baseBonus * (1 + upgLvl('air') * 0.25) * (1 + perkVal('air')));
           score += bonus * feverScoreMult();
           runAirBonus += bonus * feverScoreMult();
           if (bonus >= 40 && !hasAch('air_big')) unlock('air_big');
@@ -2390,24 +2402,28 @@
         const ny = o.y < pcy ? (pcy > o.y + o.h ? o.y + o.h : pcy) : o.y;
         const gdx = pcx - nx, gdy = pcy - ny;
         const gap = Math.sqrt(gdx * gdx + gdy * gdy) - pcr;
+        const nmSkinBonus = perkVal('nm');       // CRIMSON: flat score / near-miss
+        const nmFeverBonus = perkVal('feverNm'); // GLITCH:  extra fever / near-miss
         if (gap > 0 && gap < 7) {
           // Razor-thin pass — extra reward + slow-mo flicker as a "clutch" cue
-          score += 25 * feverScoreMult();
-          popText('FOARTE APROAPE! +' + (25 * feverScoreMult()), pcx, pcy - 48, '#ff3df0', 1.2);
+          const gain = (25 + nmSkinBonus) * feverScoreMult();
+          score += gain;
+          popText('FOARTE APROAPE! +' + gain, pcx, pcy - 48, '#ff3df0', 1.2);
           addRing(pcx, pcy, 60, '255,61,240', 24);
           audio.nearmiss();
           slowmoFrames = Math.max(slowmoFrames, 8);
           glitchFrame = frame;
           shake = Math.max(shake, 6);
-          addFever(0.12);
+          addFever(0.12 + nmFeverBonus);
           runNearMisses++;
           if (runNearMisses >= 10 && !hasAch('nm_clutch')) unlock('nm_clutch');
         } else if (gap > 0 && gap < 18) {
-          score += 10 * feverScoreMult();
-          popText('APROAPE! +' + (10 * feverScoreMult()), pcx, pcy - 46, '#19f0ff', 1.0);
+          const gain = (10 + nmSkinBonus) * feverScoreMult();
+          score += gain;
+          popText('APROAPE! +' + gain, pcx, pcy - 46, '#19f0ff', 1.0);
           addRing(pcx, pcy, 46, '120,230,255', 16);
           audio.nearmiss();
-          addFever(0.05);
+          addFever(0.05 + nmFeverBonus);
           runNearMisses++;
           if (runNearMisses >= 10 && !hasAch('nm_clutch')) unlock('nm_clutch');
         }
@@ -2419,7 +2435,7 @@
       if (dx * dx + dy * dy < (c.r + pcr + 6) * (c.r + pcr + 6)) {
         c.picked = true;
         const gm = gemMult(c.type);
-        runCoins += ((feverActive ? 2 : 1) + upgLvl('stars')) * gm;
+        runCoins += ((feverActive ? 2 : 1) + upgLvl('stars') + perkVal('coin')) * gm;
         missionEvent('coin');
         if (frame - lastCoinFrame < comboWindow()) combo++;
         else combo = 1;
@@ -2480,7 +2496,7 @@
           popText('SHIELD', p.x, p.y - 20, '#19f0ff', 1.2);
           addRing(p.x, p.y, 70, '25,240,255', 28);
         } else if (p.type === 'sprint') {
-          const dur = 60 * (5 + upgLvl('sprint'));
+          const dur = 60 * (5 + upgLvl('sprint') + perkVal('sprint'));
           sprintFrames = dur;
           popText('SPRINT ' + (dur / 60).toFixed(0) + 's', p.x, p.y - 20, '#fff', 1.3);
           addRing(p.x, p.y, 80, '255,255,255', 30);
