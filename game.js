@@ -2245,6 +2245,84 @@
     }
   }
 
+  // Parallax / atmosphere scroll — shared by gameplay and the attract menu so
+  // the title scene is alive instead of frozen. Uses the outer `speed`.
+  function updateScenery() {
+    stars.forEach((s) => {
+      s.x -= speed * s.s;
+      s.tw += 0.05;
+      if (s.x < -5) s.x = W + 5;
+    });
+    // Nebula — very slow far drift + breathing
+    nebula.forEach((nb) => {
+      nb.x -= speed * 0.05;
+      nb.tw += 0.012;
+      if (nb.x + nb.r < -40) { nb.x = W + nb.r + Math.random() * 120; nb.y = 40 + Math.random() * (GROUND - 200); }
+    });
+    // Shooting stars — spawn rarely, fly diagonally
+    if (rnd() < 0.012 && shootingStars.length < 2) {
+      shootingStars.push({
+        x: W * (0.3 + rnd() * 0.7),
+        y: rnd() * (GROUND - 240),
+        vx: -(5 + rnd() * 4),
+        vy: 2 + rnd() * 2,
+        life: 26
+      });
+    }
+    shootingStars.forEach((ss) => { ss.x += ss.vx; ss.y += ss.vy; ss.life--; });
+    shootingStars = shootingStars.filter((ss) => ss.life > 0 && ss.x > -60);
+    // Rings — expand + fade
+    rings.forEach((rg) => { rg.r += (rg.maxR - rg.r) * 0.16; rg.life--; });
+    rings = rings.filter((rg) => rg.life > 0);
+    // Foreground shafts — fast parallax (1.8x), wrap around
+    fgShafts.forEach((sh) => {
+      sh.x -= speed * 1.8;
+      if (sh.x + sh.w < -20) sh.x += (W + 600);
+    });
+    // Foreground motes — closest, drift fastest + bob
+    fgMotes.forEach((mo) => {
+      mo.x -= speed * mo.sp;
+      mo.tw += 0.04;
+      mo.y += Math.sin(mo.tw) * 0.4;
+      if (mo.x < -6) { mo.x = W + 6; mo.y = Math.random() * H; }
+    });
+    mountains.forEach((m) => {
+      m.x -= speed * 0.15;
+    });
+    if (mountains.length && mountains[0].x + mountains[0].w < -50) mountains.shift();
+    while (mountains.length < 20 && mountains[mountains.length - 1].x + mountains[mountains.length - 1].w < W + 200) {
+      const last = mountains[mountains.length - 1];
+      const w = 180 + Math.random() * 160;
+      mountains.push({ x: last.x + last.w * 0.6, w, h: 120 + Math.random() * 100, hue: 280 + Math.random() * 40 });
+    }
+    buildings.forEach((b) => (b.x -= speed * 0.4));
+    if (buildings.length && buildings[0].x + buildings[0].w < -10) buildings.shift();
+    while (buildings.length < 30 && buildings[buildings.length - 1].x + buildings[buildings.length - 1].w < W + 100) {
+      const last = buildings[buildings.length - 1];
+      const w = 50 + Math.random() * 80;
+      buildings.push({
+        x: last.x + last.w + 8,
+        w,
+        h: 80 + Math.random() * 180,
+        windows: Math.random() > 0.3
+      });
+    }
+  }
+
+  // Attract mode — gently scroll the synthwave scene behind the title/menu so
+  // it breathes. No player physics, spawns, or collisions; purely ambient.
+  function updateAttract() {
+    frame++;
+    speed = 2.4;
+    scrollX += speed;
+    updateScenery();
+    updateWeather();
+    texts.forEach((t) => { t.y -= 0.8; t.life--; });
+    texts = texts.filter((t) => t.life > 0);
+    particles.forEach((p) => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--; });
+    particles = particles.filter((p) => p.life > 0);
+  }
+
   // ---------- Update ----------
   function update() {
     frame++;
@@ -2504,66 +2582,7 @@
     texts.forEach((t) => { t.y -= 0.8; t.life--; });
     texts = texts.filter((t) => t.life > 0);
 
-    // Parallax move
-    stars.forEach((s) => {
-      s.x -= speed * s.s;
-      s.tw += 0.05;
-      if (s.x < -5) s.x = W + 5;
-    });
-    // Nebula — very slow far drift + breathing
-    nebula.forEach((nb) => {
-      nb.x -= speed * 0.05;
-      nb.tw += 0.012;
-      if (nb.x + nb.r < -40) { nb.x = W + nb.r + Math.random() * 120; nb.y = 40 + Math.random() * (GROUND - 200); }
-    });
-    // Shooting stars — spawn rarely, fly diagonally
-    if (rnd() < 0.012 && shootingStars.length < 2) {
-      shootingStars.push({
-        x: W * (0.3 + rnd() * 0.7),
-        y: rnd() * (GROUND - 240),
-        vx: -(5 + rnd() * 4),
-        vy: 2 + rnd() * 2,
-        life: 26
-      });
-    }
-    shootingStars.forEach((ss) => { ss.x += ss.vx; ss.y += ss.vy; ss.life--; });
-    shootingStars = shootingStars.filter((ss) => ss.life > 0 && ss.x > -60);
-    // Rings — expand + fade
-    rings.forEach((rg) => { rg.r += (rg.maxR - rg.r) * 0.16; rg.life--; });
-    rings = rings.filter((rg) => rg.life > 0);
-    // Foreground shafts — fast parallax (1.8x), wrap around
-    fgShafts.forEach((sh) => {
-      sh.x -= speed * 1.8;
-      if (sh.x + sh.w < -20) sh.x += (W + 600);
-    });
-    // Foreground motes — closest, drift fastest + bob
-    fgMotes.forEach((mo) => {
-      mo.x -= speed * mo.sp;
-      mo.tw += 0.04;
-      mo.y += Math.sin(mo.tw) * 0.4;
-      if (mo.x < -6) { mo.x = W + 6; mo.y = Math.random() * H; }
-    });
-    mountains.forEach((m) => {
-      m.x -= speed * 0.15;
-    });
-    if (mountains.length && mountains[0].x + mountains[0].w < -50) mountains.shift();
-    while (mountains.length < 20 && mountains[mountains.length - 1].x + mountains[mountains.length - 1].w < W + 200) {
-      const last = mountains[mountains.length - 1];
-      const w = 180 + Math.random() * 160;
-      mountains.push({ x: last.x + last.w * 0.6, w, h: 120 + Math.random() * 100, hue: 280 + Math.random() * 40 });
-    }
-    buildings.forEach((b) => (b.x -= speed * 0.4));
-    if (buildings.length && buildings[0].x + buildings[0].w < -10) buildings.shift();
-    while (buildings.length < 30 && buildings[buildings.length - 1].x + buildings[buildings.length - 1].w < W + 100) {
-      const last = buildings[buildings.length - 1];
-      const w = 50 + Math.random() * 80;
-      buildings.push({
-        x: last.x + last.w + 8,
-        w,
-        h: 80 + Math.random() * 180,
-        windows: Math.random() > 0.3
-      });
-    }
+    updateScenery();
 
     // Particles
     particles.forEach((p) => {
@@ -4051,6 +4070,7 @@
       while (accumulator >= FIXED_DT && steps < 5) {
         if (state === STATE.PLAY) update();
         else if (state === STATE.OVER) updateOver();
+        else if (state === STATE.MENU) updateAttract();
         accumulator -= FIXED_DT;
         steps++;
       }
