@@ -4644,8 +4644,9 @@
       ctx.fillRect(0, 0, W, H);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // Stacked pulse halos behind the title text
-      const pulse = 0.85 + 0.15 * Math.sin(frame * 0.08);
+      // Stacked pulse halos behind the title text. Uses wall-clock time so the
+      // halo keeps breathing even while gameplay `frame` is frozen.
+      const pulse = 0.85 + 0.15 * Math.sin(performance.now() * 0.003);
       const cy = H * 0.42;
       const halo = ctx.createRadialGradient(W / 2, cy, 0, W / 2, cy, 220 * pulse);
       halo.addColorStop(0, 'rgba(255,61,240,' + (0.22 * pulse) + ')');
