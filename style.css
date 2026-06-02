@@ -622,6 +622,15 @@ html, body {
   padding: 20px 16px 90px;
 }
 
+/* Screen overlays (shop / missions / stats) can grow taller than the phone —
+   scroll the whole panel instead of clipping content off the top or bottom. */
+.overlay.screen {
+  align-items: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.overlay.screen .panel.wide { margin: 0 auto; }
+
 .screen-head {
   display: flex;
   justify-content: space-between;
@@ -892,8 +901,6 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 220px;
-  overflow-y: auto;
   padding-right: 4px;
 }
 .ach-item {
