@@ -1038,6 +1038,7 @@
     { id: 'nebula',  name: 'NEBULA',  cost: 2200, locked: true, core:['#fff','#e8d8ff','#a874ff','#3a1a7a'], halo:['rgba(180,120,255,0.55)','rgba(120,80,220,0.22)'], ring:'rgba(220,180,255,0.8)', trail:'180,130,255', perk:{ type:'sprint',  val:2,    label:'+2s la Sprint' } },
     { id: 'aurora',  name: 'AURORA',  cost: 4500, locked: true, core:['#fff','#ccffe8','#3dffd0','#0a6e5a'], halo:['rgba(100,255,210,0.6)','rgba(60,200,255,0.22)'], ring:'rgba(140,255,220,0.8)', trail:'100,255,210', perk:{ type:'coin',    val:1,    label:'+1 stea / coin' } },
     { id: 'titan',   name: 'TITAN',   cost: 6000, locked: true, core:['#fff','#ffe0b0','#ff8a1e','#7a3200'], halo:['rgba(255,140,40,0.6)','rgba(255,80,20,0.25)'],   ring:'rgba(255,170,90,0.8)',  trail:'255,150,60',  perk:{ type:'slam',    val:0.7,  label:'+70% rază Dive-Slam' } },
+    { id: 'phantom', name: 'PHANTOM', cost: 7500, locked: true, animated: true, core:['#fff','#dccfff','#9876ff','#2a0f6e'], halo:['rgba(160,110,255,0.6)','rgba(100,60,200,0.25)'], ring:'rgba(200,160,255,0.85)', trail:'200,160,255', perk:{ type:'phase',   val:2,    label:'+2s la PHASE' } },
     // Rank-gated reward skin — earned by reaching pilot rank, not bought
     { id: 'void',    name: 'VOID',    cost: 0, locked: true, rankReq: 5, animated: true, core:['#fff','#d8c8ff','#7a3dff','#1a0640'], halo:['rgba(140,80,255,0.6)','rgba(80,40,200,0.25)'], ring:'rgba(180,120,255,0.9)', trail:'160,110,255', perk:{ type:'gem', val:1.0, label:'+100% șansă gem' } }
   ];
@@ -3056,7 +3057,7 @@
           missionEvent('sprint');
           if (!hasAch('sprint_first')) unlock('sprint_first');
         } else if (p.type === 'phase') {
-          const dur = 60 * 5;
+          const dur = 60 * (5 + perkVal('phase')); // PHANTOM skin: +2s
           phaseFrames = Math.max(phaseFrames, dur);
           phaseStreak = 0;
           invincibleUntil = Math.max(invincibleUntil, frame + dur);
