@@ -535,6 +535,33 @@ html, body {
   50% { box-shadow: 0 0 40px rgba(255, 61, 240, 0.7); }
 }
 
+.run-breakdown {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  background: rgba(11, 16, 32, 0.55);
+  border: 1px solid rgba(25, 240, 255, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 0 0 16px;
+}
+.run-breakdown > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--neon-cyan);
+}
+.rb-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  opacity: 0.55;
+  margin-bottom: 2px;
+  color: var(--text);
+}
+
 .goal-msg {
   font-size: 12px;
   opacity: 0.85;

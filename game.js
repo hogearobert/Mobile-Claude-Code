@@ -526,6 +526,11 @@
   // Pure visual; collision uses the unrotated circle.
   let groundRoll = 0;
   let airframes = 0;
+  // Per-run telemetry shown on the game-over breakdown
+  let runMaxCombo = 0;
+  let runNearMisses = 0;
+  let runAirBonus = 0;
+  let recordBrokenThisRun = false;
 
   // ---------- Levels (palette + difficulty) ----------
   const LEVELS = [
@@ -728,7 +733,7 @@
       if (setpiece.spawnTimer <= 0) {
         const baseY = GROUND - 70 - rnd() * 130;
         for (let i = 0; i < 3; i++) {
-          coinsArr.push({ x: W + 30 + i * 30, y: baseY + Math.sin(i * 1.3) * 22, r: 14, picked: false, t: Math.random() * 6.28 });
+          coinsArr.push({ x: W + 30 + i * 30, y: baseY + Math.sin(i * 1.3) * 22, r: 14, picked: false, type: rollGem(), t: Math.random() * 6.28 });
         }
         setpiece.spawnTimer = 20;
       }
@@ -747,7 +752,7 @@
         } else {
           // bonus coin arc through the chaos
           const by = GROUND - 90 - rnd() * 80;
-          for (let i = 0; i < 3; i++) coinsArr.push({ x: W + 30 + i * 28, y: by, r: 14, picked: false, t: rnd() * 6.28 });
+          for (let i = 0; i < 3; i++) coinsArr.push({ x: W + 30 + i * 28, y: by, r: 14, picked: false, type: rollGem(), t: rnd() * 6.28 });
         }
         setpiece.spawnTimer = 42 + Math.floor(rnd() * 16);
       }
@@ -1380,6 +1385,10 @@
     inputGraceUntil = 4;
     groundRoll = 0;
     airframes = 0;
+    runMaxCombo = 0;
+    runNearMisses = 0;
+    runAirBonus = 0;
+    recordBrokenThisRun = false;
     levelIdx = 0;
     palette = LEVELS[0];
     skyGradient = null;
@@ -1543,6 +1552,15 @@
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
     finalCoinsEl.textContent = '+' + earned;
+    // Per-run breakdown (combo, near-miss, air-time bonus) shown when meaningful
+    const rb = document.getElementById('runBreakdown');
+    if (rb) {
+      const meaningful = runMaxCombo > 0 || runNearMisses > 0 || runAirBonus > 0;
+      rb.style.display = meaningful ? 'flex' : 'none';
+      const c = document.getElementById('rbCombo'); if (c) c.textContent = 'x' + runMaxCombo;
+      const n = document.getElementById('rbNm');    if (n) n.textContent = runNearMisses;
+      const a = document.getElementById('rbAir');   if (a) a.textContent = '+' + runAirBonus;
+    }
     if (reviveBtn) reviveBtn.style.display = reviveUsed ? 'none' : 'inline-block';
     if (doubleCoinsBtn) { doubleCoinsBtn.disabled = false; doubleCoinsBtn.style.display = earned > 0 ? '' : 'none'; }
     missionEvent('gameover', score);
@@ -1833,6 +1851,17 @@
     { id: 'spring_dodge', minScore: 900, span: 460, obs: [{ t: 'spike', dx: 460 }], spring: { dx: 30 }, coins: { dx: 30, springArc: true } }
   ];
 
+  // Gem variant chooser — rare colour gems pay out multiplied stars + score.
+  // 88% gold star (default), 10% blue (5x), 2% red (10x). Uses the seeded rng
+  // so the daily challenge stays fully deterministic.
+  function rollGem() {
+    const r = rnd();
+    if (r < 0.02) return 'red';
+    if (r < 0.12) return 'blue';
+    return 'star';
+  }
+  function gemMult(t) { return t === 'red' ? 10 : t === 'blue' ? 5 : 1; }
+
   function spawnPattern() {
     const pool = PATTERNS.filter((p) => dist >= p.minScore);
     const p = pool[Math.floor(rnd() * pool.length)];
@@ -1844,16 +1873,16 @@
       const cx0 = x0 + (p.coins.dx || 0);
       if (p.coins.lowArc) {
         // coins to grab while sliding under the overhang
-        for (let i = 0; i < 3; i++) coinsArr.push({ x: cx0 + i * 26, y: GROUND - 22, r: 13, picked: false, t: rnd() * 6.28 });
+        for (let i = 0; i < 3; i++) coinsArr.push({ x: cx0 + i * 26, y: GROUND - 22, r: 13, picked: false, type: rollGem(), t: rnd() * 6.28 });
       } else if (p.coins.springArc) {
         // High arc — only reachable after the jump-pad launch
         for (let i = 0; i < 6; i++) {
-          coinsArr.push({ x: cx0 + i * 34, y: GROUND - 230 - Math.sin((i / 5) * Math.PI) * 70, r: 13, picked: false, t: rnd() * 6.28 });
+          coinsArr.push({ x: cx0 + i * 34, y: GROUND - 230 - Math.sin((i / 5) * Math.PI) * 70, r: 13, picked: false, type: rollGem(), t: rnd() * 6.28 });
         }
       } else if (p.coins.arc || p.coins.midArc) {
         const baseY = GROUND - (p.coins.midArc ? 150 : 120);
         for (let i = 0; i < 5; i++) {
-          coinsArr.push({ x: cx0 + i * 30, y: baseY - Math.sin((i / 4) * Math.PI) * 50, r: 13, picked: false, t: rnd() * 6.28 });
+          coinsArr.push({ x: cx0 + i * 30, y: baseY - Math.sin((i / 4) * Math.PI) * 50, r: 13, picked: false, type: rollGem(), t: rnd() * 6.28 });
         }
       }
     }
@@ -1893,16 +1922,16 @@
     const baseY = GROUND - 80 - rnd() * 100;
     const batch = [];
     if (pattern === 0) {
-      batch.push({ x: W + 30, y: baseY, r: 14, picked: false, t: rnd() * Math.PI * 2 });
+      batch.push({ x: W + 30, y: baseY, r: 14, picked: false, type: rollGem(), t: rnd() * Math.PI * 2 });
     } else if (pattern === 1) {
       for (let i = 0; i < 5; i++) {
         const px = W + 30 + i * 36;
         const py = baseY - Math.sin((i / 4) * Math.PI) * 60;
-        batch.push({ x: px, y: py, r: 14, picked: false, t: rnd() * Math.PI * 2 });
+        batch.push({ x: px, y: py, r: 14, picked: false, type: rollGem(), t: rnd() * Math.PI * 2 });
       }
     } else {
       for (let i = 0; i < 4; i++) {
-        batch.push({ x: W + 30 + i * 32, y: baseY, r: 14, picked: false, t: rnd() * Math.PI * 2 });
+        batch.push({ x: W + 30 + i * 32, y: baseY, r: 14, picked: false, type: rollGem(), t: rnd() * Math.PI * 2 });
       }
     }
     for (const c of batch) {
@@ -2053,6 +2082,7 @@
           const baseBonus = Math.min(60, Math.floor(airframes / 1.2));
           const bonus = Math.floor(baseBonus * (1 + upgLvl('air') * 0.25));
           score += bonus * feverScoreMult();
+          runAirBonus += bonus * feverScoreMult();
           popText('+' + (bonus * feverScoreMult()) + ' AIR!', player.x + player.w / 2, GROUND - 80, '#ffe14a', 1.05);
           addRing(player.x + player.w / 2, GROUND - 18, 46, '255,225,74', 18);
           audio.coin(3);
@@ -2356,12 +2386,14 @@
           glitchFrame = frame;
           shake = Math.max(shake, 6);
           addFever(0.12);
+          runNearMisses++;
         } else if (gap > 0 && gap < 18) {
           score += 10 * feverScoreMult();
           popText('APROAPE! +' + (10 * feverScoreMult()), pcx, pcy - 46, '#19f0ff', 1.0);
           addRing(pcx, pcy, 46, '120,230,255', 16);
           audio.nearmiss();
           addFever(0.05);
+          runNearMisses++;
         }
       }
     }
@@ -2370,16 +2402,24 @@
       const dy = c.y - pcy;
       if (dx * dx + dy * dy < (c.r + pcr + 6) * (c.r + pcr + 6)) {
         c.picked = true;
-        runCoins += (feverActive ? 2 : 1) + upgLvl('stars');
+        const gm = gemMult(c.type);
+        runCoins += ((feverActive ? 2 : 1) + upgLvl('stars')) * gm;
         missionEvent('coin');
         if (frame - lastCoinFrame < comboWindow()) combo++;
         else combo = 1;
         lastCoinFrame = frame;
         const m = comboMult();
-        score += 5 * m * feverScoreMult() * sprintMult();
+        const gain = 5 * m * feverScoreMult() * sprintMult() * gm;
+        score += gain;
         audio.coin(combo - 1);
-        addRing(c.x, c.y, 30, feverActive ? '255,61,240' : '255,225,74', 18);
+        if (gm > 1) {
+          popText('+' + gain, c.x, c.y - 20, c.type === 'red' ? '#ff3df0' : '#19f0ff', 1.1);
+          addRing(c.x, c.y, 44, c.type === 'red' ? '255,61,240' : '120,230,255', 24);
+        }
+        const ringCol = c.type === 'red' ? '255,61,240' : c.type === 'blue' ? '120,230,255' : (feverActive ? '255,61,240' : '255,225,74');
+        addRing(c.x, c.y, 30, ringCol, 18);
         setComboUI(combo >= 2 ? ('x' + combo + (m > 1 ? '  ' + m + '×' : '')) : '');
+        if (combo > runMaxCombo) runMaxCombo = combo;
         addFever(0.035);
         if (combo === 5 || combo === 10 || combo === 15 || combo === 20 || combo === 30) {
           popText(combo + ' COMBO!', c.x, c.y - 20, palette.sun, 1.1);
@@ -2453,6 +2493,31 @@
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
     score += (1 + levelIdx * 0.1) * feverScoreMult() * sprintMult();
     tryLevelUp();
+    // Mid-run record celebration — fires the frame the player crosses their
+    // previous best. Single-shot via the flag; only meaningful when there IS
+    // a previous best (skip on the first-ever run).
+    if (!recordBrokenThisRun && !dailyMode && best > 0 && score > best) {
+      recordBrokenThisRun = true;
+      popText('🏆 RECORD NOU!', W / 2, GROUND - 240, '#ffe14a', 1.9);
+      flashFrame = frame;
+      glitchFrame = frame;
+      zoomPunch = Math.max(zoomPunch, 0.10);
+      shake = Math.max(shake, 9);
+      slowmoFrames = Math.max(slowmoFrames, 14);
+      addRing(W / 2, GROUND - 140, 280, '255,225,74', 50);
+      addRing(W / 2, GROUND - 140, 220, '255,61,240', 44);
+      audio.power();
+      audio.levelup();
+      music.duck();
+      addFever(0.25);
+      for (let i = 0; i < 36; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+        const v = Math.random() * 11 + 5;
+        pushParticle(W / 2, GROUND - 110, Math.cos(a) * v, Math.sin(a) * v, 70,
+          ['#ffe14a', '#ff3df0', '#19f0ff', '#fff'][i % 4], Math.random() * 4 + 2);
+      }
+      if (navigator.vibrate) { try { navigator.vibrate([40, 80, 40, 80, 200]); } catch (_) {} }
+    }
     // Achievements (use >= because combo multipliers can skip exact values)
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
     if (score >= 2000 && !hasAch('score_2000')) unlock('score_2000');
@@ -3260,22 +3325,37 @@
       const spin = Math.cos(c.t);          // -1..1 → 3D rotation around Y
       const wobble = Math.max(0.12, Math.abs(spin));
       const edge = spin < 0;               // showing the back face
+      // Gem palette — blue & red coin variants render in their own colours
+      const isBlue = c.type === 'blue';
+      const isRed = c.type === 'red';
+      const haloRGB = isRed ? '255,80,220' : isBlue ? '120,230,255' : '255,225,74';
       // Proximity / magnet glow halo
       const dxp = c.x - (player.x + player.w / 2);
       const dyp = c.y - (player.y + player.h / 2);
       const near = magnetOn || (dxp * dxp + dyp * dyp < 150 * 150);
-      if (near) {
-        const hg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r * 2.4);
-        hg.addColorStop(0, 'rgba(255,225,74,0.5)');
-        hg.addColorStop(1, 'rgba(255,225,74,0)');
+      if (near || isBlue || isRed) {
+        const sparkle = (isBlue || isRed) ? 0.45 + 0.25 * Math.abs(Math.sin(c.t * 1.4)) : 0.5;
+        const hg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r * 2.6);
+        hg.addColorStop(0, 'rgba(' + haloRGB + ',' + sparkle + ')');
+        hg.addColorStop(1, 'rgba(' + haloRGB + ',0)');
         ctx.fillStyle = hg;
-        ctx.fillRect(c.x - c.r * 2.4, c.y - c.r * 2.4, c.r * 4.8, c.r * 4.8);
+        ctx.fillRect(c.x - c.r * 2.6, c.y - c.r * 2.6, c.r * 5.2, c.r * 5.2);
       }
-      // Coin body with vertical gold gradient
+      // Coin body — gradient palette switches per gem type
       const g = ctx.createLinearGradient(c.x, c.y - c.r, c.x, c.y + c.r);
-      g.addColorStop(0, edge ? '#c8920a' : '#fff0a0');
-      g.addColorStop(0.5, edge ? '#a8780a' : '#ffe14a');
-      g.addColorStop(1, edge ? '#7a5500' : '#d9a516');
+      if (isRed) {
+        g.addColorStop(0, edge ? '#7a0a40' : '#ffcad0');
+        g.addColorStop(0.5, edge ? '#a8104a' : '#ff3df0');
+        g.addColorStop(1, edge ? '#52041a' : '#a8104a');
+      } else if (isBlue) {
+        g.addColorStop(0, edge ? '#0a4a7a' : '#caf0ff');
+        g.addColorStop(0.5, edge ? '#0a7aa8' : '#19f0ff');
+        g.addColorStop(1, edge ? '#04304a' : '#0b94ad');
+      } else {
+        g.addColorStop(0, edge ? '#c8920a' : '#fff0a0');
+        g.addColorStop(0.5, edge ? '#a8780a' : '#ffe14a');
+        g.addColorStop(1, edge ? '#7a5500' : '#d9a516');
+      }
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.ellipse(c.x, c.y, c.r * wobble, c.r, 0, 0, Math.PI * 2);

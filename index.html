@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=55" />
+  <link rel="stylesheet" href="style.css?v=56" />
 </head>
 <body>
   <div id="app">
@@ -97,6 +97,11 @@
           <div><span class="label">Record</span><span id="finalBest">0</span></div>
           <div><span class="label">Stele</span><span id="finalCoins">0</span></div>
         </div>
+        <div id="runBreakdown" class="run-breakdown" style="display:none">
+          <div><span class="rb-lbl">Combo Max</span><span id="rbCombo">0</span></div>
+          <div><span class="rb-lbl">Near Miss</span><span id="rbNm">0</span></div>
+          <div><span class="rb-lbl">Bonus Air</span><span id="rbAir">0</span></div>
+        </div>
         <p id="goalMsg" class="goal-msg"></p>
         <button id="reviveBtn" class="btn revive">▶ REVIVE GRATUIT</button>
         <button id="doubleCoinsBtn" class="btn double-coins">💰 2× STELE</button>
@@ -179,7 +184,7 @@
 
   </div>
 
-  <script src="game.js?v=55"></script>
+  <script src="game.js?v=56"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT
