@@ -881,7 +881,9 @@
     { id: 'solar',   name: 'SOLAR',   cost: 500,  locked: true,  core:['#fff','#fff5d0','#ffd64a','#a86b00'], halo:['rgba(255,225,100,0.6)','rgba(255,120,40,0.25)'], ring:'rgba(255,200,80,0.75)', trail:'255,225,100' },
     { id: 'crimson', name: 'CRIMSON', cost: 1500, locked: true,  core:['#fff','#ffcad0','#ff3d6e','#8a0a20'], halo:['rgba(255,80,120,0.55)','rgba(255,40,60,0.25)'],  ring:'rgba(255,120,140,0.75)', trail:'255,100,140' },
     { id: 'cosmic',  name: 'COSMIC',  cost: 3500, locked: true,  core:['#fff','#e0d0ff','#b04dff','#3a0a8c'], halo:['rgba(180,80,255,0.55)','rgba(120,40,255,0.25)'], ring:'rgba(200,120,255,0.75)', trail:'180,100,255' },
-    { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, animated: true, core:['#fff','#ffd0ff','#ff3df0','#5a0a8c'], halo:['rgba(255,61,240,0.6)','rgba(180,40,200,0.22)'], ring:'rgba(255,200,255,0.85)', trail:'255,140,255' }
+    { id: 'glitch',  name: 'GLITCH',  cost: 0,    locked: true, adOnly: true, animated: true, core:['#fff','#ffd0ff','#ff3df0','#5a0a8c'], halo:['rgba(255,61,240,0.6)','rgba(180,40,200,0.22)'], ring:'rgba(255,200,255,0.85)', trail:'255,140,255' },
+    { id: 'nebula',  name: 'NEBULA',  cost: 2200, locked: true, core:['#fff','#e8d8ff','#a874ff','#3a1a7a'], halo:['rgba(180,120,255,0.55)','rgba(120,80,220,0.22)'], ring:'rgba(220,180,255,0.8)', trail:'180,130,255' },
+    { id: 'aurora',  name: 'AURORA',  cost: 4500, locked: true, core:['#fff','#ccffe8','#3dffd0','#0a6e5a'], halo:['rgba(100,255,210,0.6)','rgba(60,200,255,0.22)'], ring:'rgba(140,255,220,0.8)', trail:'100,255,210' }
   ];
   function ownedSkin(id) {
     if (id === 'cyan') return true;
@@ -3093,6 +3095,36 @@
     }
   }
 
+  // Magnet attraction streaks — soft additive lines from each in-range coin
+  // toward the player while the magnet is active. Sells the pull effect and
+  // turns the magnet from "just pulls them" into "looks INSANE pulling them".
+  function drawMagnetStreaks() {
+    if (magnetFrames <= 0 || !coinsArr.length) return;
+    const pcx = player.x + player.w / 2;
+    const pcy = player.y + player.h / 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 1.4;
+    for (const c of coinsArr) {
+      const dx = pcx - c.x;
+      const dy = pcy - c.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > 200 * 200 || d2 < 30 * 30) continue;
+      const d = Math.sqrt(d2);
+      const fade = 1 - d / 200;
+      const col = c.type === 'red' ? '255,80,220' : c.type === 'blue' ? '120,230,255' : '255,225,74';
+      const g = ctx.createLinearGradient(c.x, c.y, pcx, pcy);
+      g.addColorStop(0, 'rgba(' + col + ',' + (0.55 * fade).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(' + col + ',0)');
+      ctx.strokeStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(pcx, pcy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawSprings() {
     for (const s of springs) {
       const cx = s.x + s.w / 2;
@@ -3362,11 +3394,11 @@
       ctx.fill();
       // Inner ring face (only when showing the front clearly)
       if (!edge) {
-        ctx.fillStyle = 'rgba(255,248,200,0.85)';
+        ctx.fillStyle = isRed ? 'rgba(255, 220, 240, 0.9)' : isBlue ? 'rgba(220, 240, 255, 0.9)' : 'rgba(255, 248, 200, 0.85)';
         ctx.beginPath();
         ctx.ellipse(c.x, c.y, (c.r - 5) * wobble, c.r - 5, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#caa015';
+        ctx.fillStyle = isRed ? '#7a0a40' : isBlue ? '#04304a' : '#caa015';
         ctx.font = 'bold ' + Math.round(c.r * 1.1) + 'px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -3374,6 +3406,13 @@
         ctx.scale(wobble, 1);
         ctx.fillText('★', c.x / wobble, c.y);
         ctx.restore();
+        // Denomination tag — clear "x5" / "x10" above gem coins so the reward
+        // value reads at a glance even mid-rush.
+        if ((isBlue || isRed)) {
+          ctx.fillStyle = isRed ? '#ff3df0' : '#19f0ff';
+          ctx.font = 'bold 11px -apple-system, "Segoe UI", sans-serif';
+          ctx.fillText(isRed ? 'x10' : 'x5', c.x, c.y - c.r - 6);
+        }
       }
       // Moving gloss streak
       const gloss = (Math.sin(c.t * 1.3) * 0.5 + 0.5);
@@ -3546,6 +3585,7 @@
     drawSpeedLines();
     drawSetpieceBoss();
     drawCoins();
+    drawMagnetStreaks();
     drawPowerups();
     drawMystery();
     drawParticles();
