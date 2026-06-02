@@ -1688,6 +1688,7 @@
     glitchFrame = -1000;
     levelWarpFrame = -1000;
     slamFlash = -1000;
+    slamCracks = [];
     zoomPunch = 0;
     landBounce = 0;
     scoreEl.textContent = '0';
@@ -2356,6 +2357,7 @@
   // never the one you're touching (that still kills you) — so it rewards a
   // precise landing in the gap, not diving blindly onto hazards.
   let slamFlash = -1000;
+  let slamCracks = []; // lingering ground-crack marks where slams landed
   function doDiveSlam(power) {
     const cx = player.x + player.w / 2;
     const cyP = player.y + player.h / 2;
@@ -2388,6 +2390,24 @@
       addFever(0.05 + destroyed * 0.04);
       shake = Math.max(shake, 9 + destroyed * 2);
       zoomPunch = Math.max(zoomPunch, 0.05);
+      // Lingering ground crack — three procedural lightning-style fissures
+      // radiating from the impact point. Scrolls with the world; fades over
+      // ~90 frames. Sells the weight of the slam even after the flash is gone.
+      const crack = { x: cx, life: 90, segs: [] };
+      for (let k = 0; k < 3; k++) {
+        const baseA = -Math.PI + (k - 1) * 0.5 + (Math.random() - 0.5) * 0.4;
+        const segs = 3 + (destroyed > 1 ? 1 : 0);
+        const pts = [{ x: 0, y: 0 }];
+        let lx = 0, ly = 0;
+        for (let s = 1; s <= segs; s++) {
+          const step = 16 + Math.random() * 14;
+          lx += Math.cos(baseA + (Math.random() - 0.5) * 0.6) * step;
+          ly += Math.abs(Math.sin(baseA + (Math.random() - 0.5) * 0.4)) * step * -0.4; // hug ground
+          pts.push({ x: lx, y: ly });
+        }
+        crack.segs.push(pts);
+      }
+      slamCracks.push(crack);
       addRing(cx, GROUND, 90 + destroyed * 30, '255,255,255', 26);
       addRing(cx, GROUND, 60, '255,225,74', 20);
       popText('SLAM! +' + gain + (destroyed > 1 ? '  ×' + destroyed : ''),
@@ -2672,6 +2692,11 @@
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
     springs.forEach((s) => { s.x -= speed; s.t += 0.15; if (s.used > 0) s.used--; });
     springs = springs.filter((s) => s.x + s.w > -30);
+    // Slam cracks scroll + fade
+    if (slamCracks.length) {
+      for (const c of slamCracks) { c.x -= speed; c.life--; }
+      slamCracks = slamCracks.filter((c) => c.life > 0 && c.x > -120);
+    }
 
     // METEOR update — meteors drift left with scroll AND fall toward their tx,
     // because the shadow stays world-anchored. On impact: flash, ring, dust,
@@ -3867,6 +3892,40 @@
     ctx.globalAlpha = 1;
   }
 
+  // Lingering ground cracks from Dive-Slams — fading glow-edged fissures on
+  // the floor. Scrolls with the world; draws below obstacles/meteors so the
+  // gameplay reads on top of the scenery flourish.
+  function drawSlamCracks() {
+    if (!slamCracks.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (const c of slamCracks) {
+      const k = c.life / 90;
+      ctx.strokeStyle = 'rgba(255,225,120,' + (0.55 * k).toFixed(3) + ')';
+      ctx.shadowColor = 'rgba(255,200,80,' + (0.6 * k).toFixed(3) + ')';
+      ctx.shadowBlur = 8 * k;
+      ctx.lineWidth = 2;
+      for (const seg of c.segs) {
+        ctx.beginPath();
+        ctx.moveTo(c.x + seg[0].x, GROUND + seg[0].y);
+        for (let i = 1; i < seg.length; i++) ctx.lineTo(c.x + seg[i].x, GROUND + seg[i].y);
+        ctx.stroke();
+      }
+      // bright core stroke
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 * k).toFixed(3) + ')';
+      ctx.lineWidth = 1;
+      for (const seg of c.segs) {
+        ctx.beginPath();
+        ctx.moveTo(c.x + seg[0].x, GROUND + seg[0].y);
+        for (let i = 1; i < seg.length; i++) ctx.lineTo(c.x + seg[i].x, GROUND + seg[i].y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   // Meteor + telegraphed ground shadow. The shadow pulses brighter as the
   // impact frame approaches so the danger window reads at a glance.
   function drawMeteors() {
@@ -4399,6 +4458,7 @@
     drawMystery();
     drawParticles();
     drawRings();
+    drawSlamCracks();
     drawObstacles();
     drawMeteors();
     drawSprings();
