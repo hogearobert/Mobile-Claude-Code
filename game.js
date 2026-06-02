@@ -1411,7 +1411,8 @@
         x: bx,
         w,
         h: 80 + Math.random() * 180,
-        windows: Math.random() > 0.3
+        windows: Math.random() > 0.3,
+        seed: (Math.random() * 0x7fffffff) | 0
       });
       bx += w + 8;
     }
@@ -2465,7 +2466,8 @@
         x: last.x + last.w + 8,
         w,
         h: 80 + Math.random() * 180,
-        windows: Math.random() > 0.3
+        windows: Math.random() > 0.3,
+        seed: (Math.random() * 0x7fffffff) | 0
       });
     }
   }
@@ -2697,7 +2699,10 @@
         }
         if (m.impact > 0) m.impact--;
       }
-      meteors = meteors.filter((m) => m.tx > -80 && (m.ttl > -8));
+      // Keep meteors alive until both the falling body AND the post-impact
+      // bloom (14 frames after landing) have finished — otherwise the orange
+      // crater fade is truncated when the meteor is filtered out at ttl=-8.
+      meteors = meteors.filter((m) => m.tx > -80 && (m.ttl > 0 || m.impact > 0));
     }
 
     // Player collision circle — matches the drawn orb; shrinks & drops while sliding
@@ -3280,26 +3285,30 @@
       ctx.lineWidth = 1;
       ctx.strokeRect(b.x + 0.5, GROUND - b.h + 0.5, b.w - 1, b.h - 1);
       if (b.windows) {
-        // Window grid with deterministic per-cell seed → some are unlit, some
-        // are warm/cool tinted, and a few flicker on a slow tick so the city
-        // visibly breathes instead of holding a static checkerboard.
+        // Window grid with a STABLE per-window seed (independent of b.x, which
+        // shifts every frame as the city scrolls). Hashes the per-building
+        // seed with the local row/col index so each window stays the same
+        // colour/tone, with a slow flicker tick toggling a few at a time.
         const flickerTick = Math.floor(frame / 18);
+        let row = 0;
         for (let wy = GROUND - b.h + 12; wy < GROUND - 20; wy += 14) {
+          let col = 0;
           for (let wx = b.x + 6; wx < b.x + b.w - 6; wx += 12) {
-            // Stable per-window hash → who's lit at all (keeps city pattern stable)
-            const seed = ((wx * 73856093) ^ (wy * 19349663)) >>> 0;
-            if (seed % 100 < 38) continue; // ~62% of cells are dark walls
+            const seed = ((b.seed ^ (col * 73856093) ^ (row * 19349663)) >>> 0);
+            col++;
+            if (seed % 100 < 55) continue; // ~55% dark walls, 45% lit windows
             // Slow flicker: a small fraction toggles each tick
             if (((seed ^ flickerTick) % 47) < 4) continue;
             // Warm yellow vs cool cyan vs hot pink (rare) — biome-agnostic city
             const tone = seed % 100;
-            const col = tone < 70 ? '255, 225, 74'
-                      : tone < 92 ? '120, 230, 255'
-                      :             '255, 80, 220';
+            const cl = tone < 70 ? '255, 225, 74'
+                     : tone < 92 ? '120, 230, 255'
+                     :             '255, 80, 220';
             const a = 0.45 + ((seed >> 4) % 30) / 100; // 0.45..0.75
-            ctx.fillStyle = 'rgba(' + col + ',' + a + ')';
+            ctx.fillStyle = 'rgba(' + cl + ',' + a + ')';
             ctx.fillRect(wx, wy, 5, 6);
           }
+          row++;
         }
       }
     }
