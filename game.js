@@ -92,6 +92,10 @@
         setTimeout(() => blip(70, 1.1, 'sine', 0.22, 38), 120);
       },
       hit() { noise(0.35, 0.5, 1200); blip(110, 0.4, 'sawtooth', 0.35, 55); },
+      meteor() {
+        // Descending whistle — high to low — for incoming meteors
+        blip(1400, 0.55, 'triangle', 0.18, 220);
+      },
       over() {
         blip(440, 0.18, 'sawtooth', 0.28);
         setTimeout(() => blip(330, 0.18, 'sawtooth', 0.28), 130);
@@ -832,6 +836,7 @@
             r: 22 + rnd() * 6,                // visual radius
             impact: 0                         // post-impact danger countdown
           });
+          if (audio.meteor) audio.meteor();
           setpiece.spawnTimer = 30 + Math.floor(rnd() * 18);
         } else {
           // Reward coin arc between waves
@@ -4391,13 +4396,23 @@
     drawPlayer();
     drawForeground();
     drawTexts();
-    // Set-piece colour wash + progress bar
+    // Set-piece colour wash + progress bar — each setpiece gets its own tint
+    // so the player reads the "rules" of the section at a glance, not just the
+    // intro popText.
     if (setpiece) {
-      const rush = setpiece.type === 'coinrush';
-      ctx.fillStyle = rush ? 'rgba(255, 200, 40, 0.07)' : 'rgba(255, 40, 60, 0.09)';
+      let washRGB = '255, 40, 60', barRGB = '255,61,110';
+      if (setpiece.type === 'coinrush') { washRGB = '255, 200, 40'; barRGB = '255,225,74'; }
+      else if (setpiece.type === 'lowg') { washRGB = '120, 200, 255'; barRGB = '140,210,255'; }
+      else if (setpiece.type === 'meteor') { washRGB = '255, 140, 60'; barRGB = '255,140,60'; }
+      else if (setpiece.type === 'tornado') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
+      ctx.fillStyle = 'rgba(' + washRGB + ',0.08)';
       ctx.fillRect(0, 0, W, H);
       const prog = 1 - setpiece.t / setpiece.dur;
-      ctx.fillStyle = rush ? 'rgba(255,225,74,0.85)' : 'rgba(255,61,110,0.85)';
+      // Backing track behind the progress bar so it never disappears against
+      // the floor on bright biomes
+      ctx.fillStyle = 'rgba(11,16,32,0.6)';
+      ctx.fillRect(0, GROUND + 2, W, 4);
+      ctx.fillStyle = 'rgba(' + barRGB + ',0.95)';
       ctx.fillRect(0, GROUND + 2, W * prog, 4);
     }
     ctx.restore();
