@@ -1082,6 +1082,12 @@
     // Return to attract mode so the synthwave scene breathes behind every menu
     // screen instead of freezing on the game-over frame (never overrides a run).
     if (state !== STATE.PLAY) state = STATE.MENU;
+    // Menu ambience — once audio is unlocked (post-game), let a soft synthwave
+    // track underscore the menus. No-op while the AudioContext is still
+    // suspended (fresh load, pre-gesture), so it never fights autoplay policy.
+    if (state === STATE.MENU && music.isPlaying && !music.isPlaying()) {
+      try { music.start(0); } catch (_) {}
+    }
     if (name === 'home') {
       document.getElementById('overlay').classList.add('show');
     } else if (name === 'shop') {
