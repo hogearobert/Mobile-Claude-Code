@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=71" />
+  <link rel="stylesheet" href="style.css?v=72" />
 </head>
 <body>
   <div id="app">
@@ -156,6 +156,13 @@
           <h2 class="screen-title">STATISTICI</h2>
           <div class="screen-coins">★ <span id="statsCoins">0</span></div>
         </div>
+        <div class="pilot-rank">
+          <div class="pilot-head">
+            <span id="pilotRankLabel">NIVEL 0 · Novice</span>
+            <span id="pilotXpText">0 / 400 XP</span>
+          </div>
+          <div class="pilot-bar"><div id="pilotXpFill" class="pilot-fill"></div></div>
+        </div>
         <div class="stats-grid">
           <div class="stat-box"><span class="stat-num" id="sBest">0</span><span class="stat-lbl">Record</span></div>
           <div class="stat-box"><span class="stat-num" id="sRuns">0</span><span class="stat-lbl">Runs</span></div>
@@ -186,7 +193,7 @@
 
   </div>
 
-  <script src="game.js?v=71"></script>
+  <script src="game.js?v=72"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

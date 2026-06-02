@@ -444,6 +444,7 @@
     deathScores: NS + 'deathScores',
     loginDate: NS + 'loginDate',
     loginStreak: NS + 'loginStreak',
+    xp: NS + 'xp',
     skinUnlocked: NS + 'skinUnlocked'
   };
   function readLS(k, dflt) { try { return localStorage.getItem(k) ?? dflt; } catch (_) { return dflt; } }
@@ -464,8 +465,43 @@
   let best = parseInt(readLS(SK.best, '0'), 10);
   let totalCoins = parseInt(readLS(SK.coins, '0'), 10);
   let totalRuns = parseInt(readLS(SK.runs, '0'), 10);
+  let totalXP = parseInt(readLS(SK.xp, '0'), 10) || 0;
   bestEl.textContent = best;
   coinsEl.textContent = totalCoins;
+
+  // ---------- Pilot rank (lifetime XP → levels → milestone star rewards) ----------
+  // XP accrues from every run's score. The curve is quadratic so early ranks
+  // come fast (dopamine) and later ranks are a long-tail chase.
+  const PILOT_TITLES = ['Novice', 'Cadet', 'Pilot', 'Veteran', 'Ace', 'Elite', 'Maestru', 'Legendă', 'Mit', 'Zeu'];
+  function xpForRank(r) { return Math.round(400 * r + 120 * r * r); } // cumulative XP needed to REACH rank r
+  function rankFromXP(xp) {
+    let r = 0;
+    while (xpForRank(r + 1) <= xp) r++;
+    return r;
+  }
+  function rankTitle(r) { return PILOT_TITLES[Math.min(r, PILOT_TITLES.length - 1)] + (r >= PILOT_TITLES.length ? ' +' + (r - PILOT_TITLES.length + 1) : ''); }
+  let pilotRank = rankFromXP(totalXP);
+  // Award XP at run end; surface any rank-ups with a reward + toast.
+  function awardXP(amount) {
+    if (amount <= 0) return;
+    const before = pilotRank;
+    totalXP += amount;
+    writeLS(SK.xp, totalXP);
+    const now = rankFromXP(totalXP);
+    if (now > before) {
+      pilotRank = now;
+      // Reward scales with the rank reached
+      for (let r = before + 1; r <= now; r++) {
+        const reward = 50 + r * 25;
+        totalCoins += reward;
+        writeLS(SK.coins, totalCoins);
+      }
+      coinsEl.textContent = totalCoins;
+      const topReward = 50 + now * 25;
+      showToast('⭐ RANG NOU · ' + rankTitle(now), 'Pilot nivel ' + now + '  ·  +' + topReward + ' ★');
+      audio.levelup && audio.levelup();
+    }
+  }
 
   const player = {
     x: 110,
@@ -1193,6 +1229,17 @@
     const sr = document.getElementById('sRuns'); if (sr) sr.textContent = totalRuns;
     const ss = document.getElementById('sStars'); if (ss) ss.textContent = totalCoins;
     const sk = document.getElementById('sStreak'); if (sk) sk.textContent = parseInt(readLS(SK.loginStreak, '0'), 10) || 0;
+    // Pilot rank banner — current rank + progress to the next
+    {
+      const cur = pilotRank;
+      const curBase = xpForRank(cur);
+      const span = Math.max(1, xpForRank(cur + 1) - curBase);
+      const into = Math.max(0, totalXP - curBase);
+      const ratio = Math.min(1, into / span);
+      const rl = document.getElementById('pilotRankLabel'); if (rl) rl.textContent = 'NIVEL ' + cur + ' · ' + rankTitle(cur);
+      const rx = document.getElementById('pilotXpText'); if (rx) rx.textContent = into + ' / ' + span + ' XP';
+      const rf = document.getElementById('pilotXpFill'); if (rf) rf.style.transform = 'scaleX(' + ratio.toFixed(4) + ')';
+    }
     const list = document.getElementById('achList');
     if (!list) return;
     list.innerHTML = '';
@@ -1677,6 +1724,7 @@
     runCoins = 0;
     writeLS(SK.coins, totalCoins);
     coinsEl.textContent = totalCoins;
+    awardXP(score); // lifetime pilot-rank progression (may grant rank-up + stars)
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
     finalCoinsEl.textContent = '+' + earned;
