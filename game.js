@@ -85,6 +85,12 @@
         setTimeout(() => blip(f * 1.5, 0.1, 'sine', 0.22), 50);
       },
       nearmiss() { blip(1320, 0.05, 'sine', 0.12, 1760); },
+      thunder() {
+        // Distant rumble: a crack of filtered noise rolling into a low boom
+        noise(0.18, 0.22, 3500);
+        setTimeout(() => noise(0.9, 0.3, 600), 90);
+        setTimeout(() => blip(70, 1.1, 'sine', 0.22, 38), 120);
+      },
       hit() { noise(0.35, 0.5, 1200); blip(110, 0.4, 'sawtooth', 0.35, 55); },
       over() {
         blip(440, 0.18, 'sawtooth', 0.28);
@@ -1288,6 +1294,36 @@
   // ---------- Dynamic weather (per level) ----------
   let weatherP = [];
   let lightningFrame = -1000;
+  let lightningBolt = null;
+  // Build a jagged bolt polyline (with a couple of forked branches) from a
+  // random sky point down toward the horizon — regenerated on each strike.
+  function makeBolt() {
+    const x0 = W * (0.2 + Math.random() * 0.6);
+    const segs = 7 + Math.floor(Math.random() * 4);
+    const endY = GROUND - 20 - Math.random() * 60;
+    const main = [{ x: x0, y: -10 }];
+    let x = x0, y = -10;
+    const step = (endY + 10) / segs;
+    for (let i = 1; i <= segs; i++) {
+      y += step;
+      x += (Math.random() - 0.5) * 70;
+      main.push({ x, y });
+    }
+    const branches = [];
+    for (let b = 0; b < 2; b++) {
+      const start = main[2 + Math.floor(Math.random() * (main.length - 3))];
+      let bx = start.x, by = start.y;
+      const bpts = [{ x: bx, y: by }];
+      const bn = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < bn; i++) {
+        bx += (Math.random() - 0.5) * 60;
+        by += 25 + Math.random() * 30;
+        bpts.push({ x: bx, y: by });
+      }
+      branches.push(bpts);
+    }
+    lightningBolt = { main, branches };
+  }
   function initWeather() {
     weatherP = [];
     const w = palette.weather;
@@ -1328,8 +1364,12 @@
         if (p.x < -8) { p.x = W + 8; p.y = Math.random() * H; }
       }
     }
-    // Lightning on rain levels
-    if (w === 'rain' && Math.random() < 0.004) lightningFrame = frame;
+    // Lightning on rain levels — also fire a thunder rumble + sky bolt
+    if (w === 'rain' && Math.random() < 0.004) {
+      lightningFrame = frame;
+      makeBolt();
+      if (audio.thunder) audio.thunder();
+    }
   }
   function drawWeather() {
     const w = palette.weather;
@@ -1377,11 +1417,44 @@
         ctx.fill();
       }
     }
-    // Lightning flash
+    // Lightning — full-sky flash + a glowing jagged bolt that flickers out
     const la = frame - lightningFrame;
-    if (la >= 0 && la < 8) {
-      ctx.fillStyle = 'rgba(200, 220, 255, ' + (0.4 * (1 - la / 8)) + ')';
-      ctx.fillRect(0, 0, W, H);
+    if (la >= 0 && la < 12) {
+      // Double-flash: bright on strike, a dim echo a few frames later
+      const flash = la < 4 ? (1 - la / 4) : (la < 7 ? 0 : 0.5 * (1 - (la - 7) / 5));
+      if (flash > 0) {
+        ctx.fillStyle = 'rgba(200, 220, 255, ' + (0.45 * flash) + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
+      if (lightningBolt && la < 8) {
+        const k = 1 - la / 8;
+        ctx.save();
+        ctx.shadowColor = 'rgba(180,210,255,' + k + ')';
+        ctx.shadowBlur = 18;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const draw = (pts, wMul) => {
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+          ctx.stroke();
+          void wMul;
+        };
+        // Outer cyan glow stroke
+        ctx.strokeStyle = 'rgba(120,200,255,' + (0.5 * k) + ')';
+        ctx.lineWidth = 6;
+        draw(lightningBolt.main);
+        for (const b of lightningBolt.branches) { ctx.lineWidth = 3; draw(b); }
+        // Bright white core
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.95 * k) + ')';
+        ctx.lineWidth = 2.2;
+        draw(lightningBolt.main);
+        ctx.strokeStyle = 'rgba(235,245,255,' + (0.7 * k) + ')';
+        ctx.lineWidth = 1.2;
+        for (const b of lightningBolt.branches) draw(b);
+        ctx.restore();
+      }
     }
   }
   initWeather();
