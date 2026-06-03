@@ -1479,7 +1479,10 @@
     { id: 'laser_survive', name: 'Tăietor de Lasere',     desc: 'Supraviețuiește un LASER GRID', reward: 130 },
     { id: 'void_biome',    name: 'Dincolo de Lumină',     desc: 'Ajunge la biomul VOID',       reward: 500 },
     { id: 'mega_overdrive', name: 'MEGA OVERDRIVE',       desc: 'Declanșează MEGA OVERDRIVE',  reward: 250 },
-    { id: 'prism_rift_clear', name: 'Prismatic',          desc: 'Supraviețuiește un PRISM RIFT', reward: 120 }
+    { id: 'prism_rift_clear', name: 'Prismatic',          desc: 'Supraviețuiește un PRISM RIFT', reward: 120 },
+    { id: 'score_15000',   name: 'Maestru de 15K',         desc: 'Atinge 15.000 scor',           reward: 400 },
+    { id: 'score_25000',   name: 'Imperiu',                desc: 'Atinge 25.000 scor',           reward: 600 },
+    { id: 'score_50000',   name: 'Mit Viu',                desc: 'Atinge 50.000 scor',           reward: 1200 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
   // In-memory unlock cache — avoids a synchronous localStorage read per trophy
@@ -4040,6 +4043,9 @@
     if (score >= 2000 && !hasAch('score_2000')) unlock('score_2000');
     if (score >= 5000 && !hasAch('score_5000')) unlock('score_5000');
     if (score >= 10000 && !hasAch('score_10000')) unlock('score_10000');
+    if (score >= 15000 && !hasAch('score_15000')) unlock('score_15000');
+    if (score >= 25000 && !hasAch('score_25000')) unlock('score_25000');
+    if (score >= 50000 && !hasAch('score_50000')) unlock('score_50000');
     if (combo >= 10 && !hasAch('combo_10')) unlock('combo_10');
     if (combo >= 20 && !hasAch('combo_20')) unlock('combo_20');
     if (combo >= 50 && !hasAch('combo_50')) unlock('combo_50');
@@ -6196,6 +6202,29 @@
     drawParticles();
     drawRings();
     drawSlamCracks();
+    // MEGA OVERDRIVE — concentric ground-ripple waves radiating from the orb,
+    // hue-cycling and continuous. Drawn here (after rings, before obstacles)
+    // so it sits on the floor without obscuring hazards.
+    if (megaActive && state === STATE.PLAY) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const acx = player.x + player.w / 2;
+      const acy = GROUND - 4;
+      for (let i = 0; i < 4; i++) {
+        const ph = ((frame + i * 22) % 88) / 88;
+        if (ph < 0.05) continue;
+        const r = 50 + ph * 360;
+        const a = (1 - ph) * 0.5;
+        const hue = (frame * 9 + i * 70) % 360;
+        ctx.strokeStyle = 'hsla(' + hue + ',95%,68%,' + a + ')';
+        ctx.lineWidth = 3 - ph * 2;
+        ctx.beginPath();
+        ctx.ellipse(acx, acy, r, r * 0.22, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     drawObstacles();
     drawLasers();
     drawMeteors();
