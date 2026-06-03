@@ -2807,7 +2807,13 @@
     // Jump-pad patterns — the high coin arcs are only reachable via the spring,
     // so the player has to commit to the launch to claim the reward.
     { id: 'spring_high',  minScore: 400, span: 220, obs: [], spring: { dx: 30 }, coins: { dx: 30, springArc: true } },
-    { id: 'spring_dodge', minScore: 900, span: 460, obs: [{ t: 'spike', dx: 460 }], spring: { dx: 30 }, coins: { dx: 30, springArc: true } }
+    { id: 'spring_dodge', minScore: 900, span: 460, obs: [{ t: 'spike', dx: 460 }], spring: { dx: 30 }, coins: { dx: 30, springArc: true } },
+    // Late-game advanced patterns — they reward AIR-DASH usage (dash through
+    // spike clusters) and tight slide-into-jump timing.
+    { id: 'dash_corridor', minScore: 2200, span: 360, obs: [{ t: 'spike', dx: 0 }, { t: 'spike', dx: 90 }, { t: 'spike', dx: 180 }, { t: 'spike', dx: 270 }, { t: 'spike', dx: 360 }], coins: { dx: 100, arc: true } },
+    { id: 'dash_blocks',   minScore: 2600, span: 280, obs: [{ t: 'block', dx: 0 }, { t: 'block', dx: 140 }, { t: 'block', dx: 280 }], coins: { dx: 80, arc: true } },
+    { id: 'high_low_high', minScore: 1700, span: 520, obs: [{ t: 'overhang', dx: 0 }, { t: 'spike', dx: 260 }, { t: 'overhang', dx: 520 }], coins: { dx: 260, lowArc: true } },
+    { id: 'flyer_tunnel',  minScore: 2900, span: 800, obs: [{ t: 'flying', dx: 0 }, { t: 'flying', dx: 200 }, { t: 'overhang', dx: 400 }, { t: 'flying', dx: 600 }, { t: 'flying', dx: 800 }], coins: { dx: 400, lowArc: true } }
   ];
 
   // Gem variant chooser — rare colour gems pay out multiplied stars + score.
