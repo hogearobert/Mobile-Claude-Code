@@ -601,6 +601,7 @@
   // Pure visual; collision uses the unrotated circle.
   let groundRoll = 0;
   let airframes = 0;
+  let airTricks = 0;        // ground-obstacle dodges chained in the current airborne arc
   // Per-run telemetry shown on the game-over breakdown
   let runMaxCombo = 0;
   let runNearMisses = 0;
@@ -1127,7 +1128,9 @@
     { id: 'timewarp_first', name: 'Cronomancer',        desc: 'Activează TIME WARP',           reward: 30 },
     { id: 'timewarp_master', name: 'Stăpân al Timpului', desc: '20 de TIME WARP folosite',     reward: 220 },
     { id: 'hyperspace',    name: 'Hyperspeed',           desc: 'Supraviețuiește un HYPERSPACE', reward: 110 },
-    { id: 'prism_biome',   name: 'Spectrum',             desc: 'Ajunge la biomul PRISM',        reward: 350 }
+    { id: 'prism_biome',   name: 'Spectrum',             desc: 'Ajunge la biomul PRISM',        reward: 350 },
+    { id: 'trick_combo',   name: 'Acrobat',              desc: 'Trece peste 2 obstacole într-un singur salt', reward: 40 },
+    { id: 'trick_pro',     name: 'Maestru Acrobat',      desc: 'Trece peste 4 obstacole într-un singur salt', reward: 120 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
   // In-memory unlock cache — avoids a synchronous localStorage read per trophy
@@ -1832,6 +1835,7 @@
     inputGraceUntil = 4;
     groundRoll = 0;
     airframes = 0;
+    airTricks = 0;
     runMaxCombo = 0;
     runNearMisses = 0;
     runAirBonus = 0;
@@ -2857,6 +2861,7 @@
           addFever(0.05);
         }
         airframes = 0;
+        airTricks = 0;
       }
       player.onGround = true;
       player.jumps = 0;
@@ -3203,6 +3208,27 @@
       if (o.x + o.w < pcx) {
         o.nearChecked = true;
         if (frame <= invincibleUntil) continue;
+        // AIR TRICK chain — clearing multiple obstacles in one airborne arc
+        // builds a trick streak. Each successive air-clear escalates the
+        // bonus (Trick → Combo Trick → Pro Trick → Master Trick). Resets on
+        // landing (handled below). Skipped for flyers since they're above-head.
+        if (!player.onGround && o.type !== 'flying') {
+          airTricks++;
+          if (airTricks >= 2) {
+            const tier = airTricks >= 5 ? { name: 'MASTER TRICK', col: '#ff3df0', sz: 1.5, gain: 70 }
+                       : airTricks >= 4 ? { name: 'PRO TRICK',    col: '#ff7a3d', sz: 1.35, gain: 50 }
+                       : airTricks >= 3 ? { name: 'COMBO TRICK',  col: '#ffe14a', sz: 1.2, gain: 35 }
+                       :                  { name: 'TRICK!',       col: '#19f0ff', sz: 1.05, gain: 22 };
+            const award = tier.gain * feverScoreMult();
+            score += award;
+            popText(tier.name + ' +' + award, pcx, pcy - 60, tier.col, tier.sz);
+            addRing(pcx, pcy, 60 + airTricks * 8, '255,225,74', 22);
+            addFever(0.04 + airTricks * 0.02);
+            if (airTricks === 2 && !hasAch('trick_combo')) unlock('trick_combo');
+            if (airTricks >= 4 && !hasAch('trick_pro')) unlock('trick_pro');
+            if (navigator.vibrate && airTricks >= 3) { try { navigator.vibrate([10, 20, 30]); } catch (_) {} }
+          }
+        }
         const nx = o.x < pcx ? (pcx > o.x + o.w ? o.x + o.w : pcx) : o.x;
         const ny = o.y < pcy ? (pcy > o.y + o.h ? o.y + o.h : pcy) : o.y;
         const gdx = pcx - nx, gdy = pcy - ny;
@@ -3733,6 +3759,33 @@
     ctx.arc(cx, cy, R, Math.PI * 1.1, Math.PI * 1.9);
     ctx.stroke();
 
+    // OVERDRIVE — the synthwave sun fires 8 radial light beams in all
+    // directions, slowly rotating. Pure cinematic flourish for the climax.
+    if (feverActive) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const beams = 8;
+      const rot = frame * 0.02;
+      for (let i = 0; i < beams; i++) {
+        const ang = rot + (i / beams) * Math.PI * 2;
+        const len = R * (3.5 + Math.sin(frame * 0.1 + i) * 0.4);
+        const ex = cx + Math.cos(ang) * len;
+        const ey = cy + Math.sin(ang) * len;
+        const bg = ctx.createLinearGradient(cx, cy, ex, ey);
+        const hue = (frame * 4 + i * 45) % 360;
+        bg.addColorStop(0, 'hsla(' + hue + ',95%,68%,0.55)');
+        bg.addColorStop(0.6, 'hsla(' + hue + ',95%,68%,0.18)');
+        bg.addColorStop(1, 'hsla(' + hue + ',95%,68%,0)');
+        ctx.strokeStyle = bg;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Mountains
     const mh = palette.mountainHue;
     for (const m of mountains) {
@@ -3876,6 +3929,39 @@
       ctx.moveTo(0, y);
       ctx.lineTo(W, y);
       ctx.stroke();
+    }
+
+    // Forward-pointing chevrons painted onto the floor — they pulse outward
+    // from the horizon and fade as they approach the camera. Reads as "the
+    // ground is racing" without breaking the perspective grid. During
+    // OVERDRIVE the chevrons hue-cycle along with the rest of the screen.
+    {
+      const chevronCount = 4;
+      ctx.save();
+      ctx.lineCap = 'round';
+      for (let i = 0; i < chevronCount; i++) {
+        // Cycle each chevron from horizon → camera every 60 frames staggered
+        const phase = ((frame + i * 18) % 72) / 72; // 0..1
+        if (phase < 0.05) continue;
+        const yFromGround = phase * (H - GROUND);
+        const cy = GROUND + yFromGround;
+        // Width of chevron scales with how close it is (perspective)
+        const w = 80 + phase * 220;
+        const alpha = Math.min(1, phase * 2.0) * (1 - phase * 0.85);
+        if (alpha < 0.03) continue;
+        const cxLine = W / 2;
+        const hue = feverActive ? ((frame * 5 + i * 30) % 360) : -1;
+        ctx.strokeStyle = hue >= 0
+          ? 'hsla(' + hue + ',95%,68%,' + (alpha * 0.55).toFixed(3) + ')'
+          : 'rgba(' + palette.accent + ',' + (alpha * 0.35).toFixed(3) + ')';
+        ctx.lineWidth = 2 + phase * 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cxLine - w / 2, cy - 12 * phase);
+        ctx.lineTo(cxLine, cy);
+        ctx.lineTo(cxLine + w / 2, cy - 12 * phase);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 
