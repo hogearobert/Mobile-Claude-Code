@@ -368,6 +368,20 @@ html, body {
   animation: feverFlow 0.6s linear infinite;
 }
 .fever-bar.active .fever-label { opacity: 1; }
+.fever-bar.mega {
+  border-color: #fff;
+  animation: megaGlow 0.28s linear infinite;
+}
+.fever-bar.mega .fever-fill {
+  background: linear-gradient(90deg, #fff, var(--neon-pink), var(--neon-yellow), var(--neon-cyan), #fff);
+  background-size: 220% 100%;
+  animation: feverFlow 0.3s linear infinite;
+}
+.fever-bar.mega .fever-label::before { content: 'MEGA '; }
+@keyframes megaGlow {
+  0%, 100% { box-shadow: 0 0 18px rgba(255, 255, 255, 0.7), 0 0 36px rgba(255, 61, 240, 0.55); }
+  50% { box-shadow: 0 0 32px rgba(255, 225, 74, 0.95), 0 0 54px rgba(255, 61, 240, 0.85); }
+}
 @keyframes feverCharged {
   0%, 100% { box-shadow: 0 0 10px rgba(255, 225, 74, 0.5); }
   50% { box-shadow: 0 0 22px rgba(255, 61, 240, 0.8); }

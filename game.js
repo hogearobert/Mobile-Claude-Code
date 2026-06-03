@@ -765,13 +765,52 @@
   let feverMeter = 0;       // 0..1 charge
   let feverActive = false;
   let feverFrames = 0;      // frames remaining while active
+  let megaMeter = 0;        // 0..1 — secondary meter that fills DURING fever; full = MEGA
+  let megaActive = false;
   const FEVER_DUR = 60 * 8; // 8 seconds of overdrive
   const FEVER_MULT = 3;
-  function feverScoreMult() { return feverActive ? FEVER_MULT : 1; }
+  const MEGA_MULT = 5;      // MEGA OVERDRIVE: 5× score (vs 3× for fever)
+  const MEGA_DUR = 60 * 6;  // 6 extra seconds on top
+  function feverScoreMult() { return megaActive ? MEGA_MULT : (feverActive ? FEVER_MULT : 1); }
   function addFever(amt) {
-    if (feverActive || feverMeter >= 1) return;
+    if (feverActive) {
+      // Charging while in fever fills the MEGA meter instead — second peak
+      if (!megaActive) {
+        megaMeter = Math.min(1, megaMeter + amt * 0.7);
+        if (megaMeter >= 1) startMega();
+      }
+      return;
+    }
+    if (feverMeter >= 1) return;
     feverMeter = Math.min(1, feverMeter + amt);
     if (feverMeter >= 1) startFever();
+  }
+  function startMega() {
+    megaActive = true;
+    // Extend the fever frames so the MEGA window has time to land
+    feverFrames = Math.max(feverFrames, MEGA_DUR);
+    shake = Math.max(shake, 18);
+    zoomPunch = Math.max(zoomPunch, 0.14);
+    slowmoFrames = Math.max(slowmoFrames, 22);
+    flashFrame = frame;
+    glitchFrame = frame;
+    popText('⚡⚡ MEGA OVERDRIVE ⚡⚡', player.x + player.w / 2, GROUND - 240, '#fff', 2.4);
+    addRing(player.x + player.w / 2, player.y + player.h / 2, 380, '255,255,255', 60);
+    addRing(player.x + player.w / 2, player.y + player.h / 2, 260, '255,61,240', 50);
+    addRing(player.x + player.w / 2, player.y + player.h / 2, 180, '255,225,74', 40);
+    if (navigator.vibrate) { try { navigator.vibrate([60, 30, 60, 30, 60, 30, 250]); } catch (_) {} }
+    audio.power && audio.power();
+    audio.levelup && audio.levelup();
+    music.duck && music.duck();
+    if (!hasAch('mega_overdrive')) unlock('mega_overdrive');
+    for (let i = 0; i < 60; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = Math.random() * 11 + 4;
+      const hue = (i * 27) % 360;
+      pushParticle(player.x + player.w / 2, player.y + player.h / 2,
+        Math.cos(a) * v, Math.sin(a) * v, 70,
+        'hsl(' + hue + ',95%,68%)', Math.random() * 4 + 2);
+    }
   }
   function startFever() {
     feverActive = true;
@@ -805,17 +844,28 @@
     feverActive = false;
     feverMeter = 0;
     feverFrames = 0;
+    if (megaActive) {
+      megaActive = false;
+      megaMeter = 0;
+      popText('MEGA ENDED', player.x + player.w / 2, GROUND - 220, '#fff', 1.4);
+    }
+    megaMeter = 0;
     music.setIntense && music.setIntense(false);
     popText('COMBO PĂSTRAT!', player.x + player.w / 2, GROUND - 200, '#19f0ff', 1.2);
     zoomPunch = Math.max(zoomPunch, 0.04);
   }
   function updateFeverUI() {
     if (!feverFillEl) return;
-    const f = feverActive ? feverFrames / FEVER_DUR : feverMeter;
+    // While in MEGA, show that meter draining; while charging MEGA show its fill
+    let f;
+    if (megaActive) f = feverFrames / MEGA_DUR;
+    else if (feverActive) f = megaMeter > 0 ? megaMeter : feverFrames / FEVER_DUR;
+    else f = feverMeter;
     feverFillEl.style.transform = 'scaleX(' + Math.max(0, Math.min(1, f)) + ')';
     if (feverBarEl) {
       feverBarEl.classList.toggle('charged', feverMeter >= 1 && !feverActive);
       feverBarEl.classList.toggle('active', feverActive);
+      feverBarEl.classList.toggle('mega', megaActive);
       feverBarEl.classList.toggle('hidden', feverMeter <= 0 && !feverActive);
     }
   }
@@ -903,7 +953,7 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
-  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado', 'hyperspace', 'nemesis', 'laser'];
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado', 'hyperspace', 'nemesis', 'laser', 'prismrift'];
   // LASER GRID set-piece — pulsing vertical beams that flicker on/off in pattern.
   // Stored as a simple `lasers` array (separate from obstacles so render & timing
   // are independent). Each laser has its own phase so the field reads as alive.
@@ -924,6 +974,7 @@
               : type === 'hyperspace' ? 460
               : type === 'nemesis' ? 520
               : type === 'laser' ? 500
+              : type === 'prismrift' ? 380
               : 560;
     setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
@@ -954,6 +1005,12 @@
       lasers = [];
       obstacles = [];
     }
+    if (type === 'prismrift') {
+      showTipOnce('prismrift', '🌈 PRISM RIFT', 'Toate gemurile sunt rare — adună tot ce poți!');
+      obstacles = [];
+      meteors = [];
+      magnetFrames = Math.max(magnetFrames, dur + 30); // auto-magnet through the whole tunnel
+    }
     const label = type === 'coinrush' ? '★ COIN RUSH ★'
                 : type === 'tornado' ? '🌪 TORNADO 🌪'
                 : type === 'lowg' ? '🌙 LOW-G 🌙'
@@ -962,6 +1019,7 @@
                 : type === 'hyperspace' ? '🌌 HYPERSPACE 🌌'
                 : type === 'nemesis' ? '👁 NEMESIS 👁'
                 : type === 'laser' ? '⚡ LASER GRID ⚡'
+                : type === 'prismrift' ? '🌈 PRISM RIFT 🌈'
                 : '⚡ GAUNTLET ⚡';
     const col = type === 'coinrush' ? '#ffe14a'
               : type === 'tornado' ? '#b478ff'
@@ -971,6 +1029,7 @@
               : type === 'hyperspace' ? '#b478ff'
               : type === 'nemesis' ? '#ff0a3d'
               : type === 'laser' ? '#ff3df0'
+              : type === 'prismrift' ? '#fff'
               : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
@@ -1142,6 +1201,28 @@
           });
         }
       }
+    } else if (setpiece.type === 'prismrift') {
+      // PRISM RIFT — short bonus tunnel: no obstacles, dense rainbow gem streams
+      // at three altitudes. Forced auto-magnet was set at start, so you sweep
+      // everything. Pure dopamine — and rare BLUE/RED gem rolls boost payout.
+      if (setpiece.spawnTimer <= 0) {
+        const lane = Math.floor(rnd() * 3);
+        const baseY = lane === 0 ? GROUND - 60 : lane === 1 ? GROUND - 170 : GROUND - 270;
+        const n = 6;
+        for (let i = 0; i < n; i++) {
+          // 35% blue, 8% red, rest gold — much richer than normal pools
+          const r = rnd();
+          const type = r < 0.08 ? 'red' : (r < 0.43 ? 'blue' : 'star');
+          coinsArr.push({
+            x: W + 30 + i * 24,
+            y: baseY + Math.sin(i * 0.7 + setpiece.t * 0.03) * 18,
+            r: 14, picked: false,
+            type,
+            t: rnd() * 6.28
+          });
+        }
+        setpiece.spawnTimer = 18 + Math.floor(rnd() * 8);
+      }
     } else if (setpiece.type === 'laser') {
       // LASER GRID — vertical laser walls scroll in. Each laser has a 60-frame
       // pulse cycle (on/off pattern) — player threads the gaps. Coin arcs spawn
@@ -1266,6 +1347,16 @@
         shake = Math.max(shake, 9);
         audio.power();
         if (!hasAch('hyperspace')) unlock('hyperspace');
+      } else if (setpiece.type === 'prismrift') {
+        runCoins += 110;
+        popText('+110 ★  PRISM RIFT COMPLETE!', W / 2, GROUND - 200, '#fff', 1.6);
+        addRing(W / 2, GROUND - 120, 260, '255,255,255', 42);
+        addRing(W / 2, GROUND - 120, 200, '255,140,255', 34);
+        addRing(W / 2, GROUND - 120, 140, '120,230,255', 28);
+        addFever(0.25);
+        shake = Math.max(shake, 9);
+        audio.power();
+        if (!hasAch('prism_rift_clear')) unlock('prism_rift_clear');
       } else if (setpiece.type === 'laser') {
         runCoins += 130;
         popText('+130 ★  LASER GRID CLEAR!', W / 2, GROUND - 200, '#ff3df0', 1.55);
@@ -1386,7 +1477,9 @@
     { id: 'dash_master',   name: 'Maestrul Dash',         desc: '50 de AIR-DASH-uri folosite', reward: 220 },
     { id: 'starburst_first', name: 'Pioaie de Stele',     desc: 'Folosește un STAR BURST',     reward: 40 },
     { id: 'laser_survive', name: 'Tăietor de Lasere',     desc: 'Supraviețuiește un LASER GRID', reward: 130 },
-    { id: 'void_biome',    name: 'Dincolo de Lumină',     desc: 'Ajunge la biomul VOID',       reward: 500 }
+    { id: 'void_biome',    name: 'Dincolo de Lumină',     desc: 'Ajunge la biomul VOID',       reward: 500 },
+    { id: 'mega_overdrive', name: 'MEGA OVERDRIVE',       desc: 'Declanșează MEGA OVERDRIVE',  reward: 250 },
+    { id: 'prism_rift_clear', name: 'Prismatic',          desc: 'Supraviețuiește un PRISM RIFT', reward: 120 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
   // In-memory unlock cache — avoids a synchronous localStorage read per trophy
@@ -2137,6 +2230,8 @@
     feverMeter = 0;
     feverActive = false;
     feverFrames = 0;
+    megaMeter = 0;
+    megaActive = false;
     if (music.setIntense) music.setIntense(false);
     updateFeverUI();
     updatePowerHud();
@@ -5682,6 +5777,41 @@
       ctx.restore();
     }
 
+    // PRISM RIFT — rainbow rings sweep outward from the player, plus a soft
+    // additive vignette. Reads instantly as "you're inside a portal".
+    if (setpiece.type === 'prismrift') {
+      const t = setpiece.t;
+      const dur = setpiece.dur;
+      const fade = Math.min(1, t / 30) * Math.min(1, (dur - t) / 30);
+      const cx = player.x + player.w / 2;
+      const cy = player.y + player.h / 2;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // Soft rainbow vignette in the upper sky
+      const vg = ctx.createRadialGradient(W / 2, GROUND - 280, W * 0.1, W / 2, GROUND - 280, W * 0.9);
+      const huev = (frame * 1.4) % 360;
+      vg.addColorStop(0, 'hsla(' + huev + ',95%,70%,' + (0.10 * fade) + ')');
+      vg.addColorStop(0.6, 'hsla(' + (huev + 80) % 360 + ',95%,60%,' + (0.06 * fade) + ')');
+      vg.addColorStop(1, 'hsla(' + (huev + 200) % 360 + ',95%,40%,0)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+      // Pulsing rainbow rings around the player
+      for (let i = 0; i < 4; i++) {
+        const phase = ((frame + i * 18) % 72) / 72;
+        if (phase < 0.05) continue;
+        const r = 30 + phase * 200;
+        const a = (1 - phase) * 0.45 * fade;
+        const hue = (frame * 3 + i * 90) % 360;
+        ctx.strokeStyle = 'hsla(' + hue + ',95%,68%,' + a + ')';
+        ctx.lineWidth = 3 - phase * 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
     // HYPERSPACE — a star-warp tunnel radiating from the right-side vanishing point.
     // Streaks emanate outward, scaling with the section's intro/outro fade.
     if (setpiece.type === 'hyperspace') {
@@ -6058,6 +6188,7 @@
       else if (setpiece.type === 'hyperspace') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
       else if (setpiece.type === 'nemesis') { washRGB = '255, 40, 80'; barRGB = '255,40,80'; }
       else if (setpiece.type === 'laser') { washRGB = '255, 61, 240'; barRGB = '255,61,240'; }
+      else if (setpiece.type === 'prismrift') { washRGB = '255, 200, 255'; barRGB = '255,255,255'; }
       ctx.fillStyle = 'rgba(' + washRGB + ',0.08)';
       ctx.fillRect(0, 0, W, H);
       const prog = 1 - setpiece.t / setpiece.dur;
@@ -6137,13 +6268,19 @@
       ctx.restore();
     }
 
-    // Combo "heat" / OVERDRIVE wash — the screen glows with the streak. During
-    // OVERDRIVE it cycles through the full neon spectrum for a frenzied look.
+    // Combo "heat" / OVERDRIVE / MEGA OVERDRIVE wash — the screen glows with
+    // the streak. During OVERDRIVE it cycles through the full neon spectrum;
+    // during MEGA OVERDRIVE the cycle accelerates and the wash deepens.
     const heat = Math.min(combo, 20) / 20;
     if (state === STATE.PLAY && (feverActive || heat > 0.25)) {
       const pulse = 0.8 + 0.2 * Math.sin(frame * 0.2);
       const hg = ctx.createRadialGradient(W / 2, GROUND - 160, H * 0.17, W / 2, GROUND - 160, H * 0.68);
-      if (feverActive) {
+      if (megaActive) {
+        // MEGA: faster cycle, stronger wash
+        const hue = (frame * 12) % 360;
+        hg.addColorStop(0, 'hsla(' + hue + ',100%,65%,0)');
+        hg.addColorStop(1, 'hsla(' + hue + ',100%,65%,' + (0.28 * pulse).toFixed(3) + ')');
+      } else if (feverActive) {
         const hue = (frame * 6) % 360;
         hg.addColorStop(0, 'hsla(' + hue + ',100%,60%,0)');
         hg.addColorStop(1, 'hsla(' + hue + ',100%,60%,' + (0.17 * pulse).toFixed(3) + ')');
@@ -6153,6 +6290,23 @@
       }
       ctx.fillStyle = hg;
       ctx.fillRect(0, 0, W, H);
+      // MEGA extra: scanning beams sweeping the screen
+      if (megaActive) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const beams = 6;
+        for (let i = 0; i < beams; i++) {
+          const ph = ((frame + i * 30) % 90) / 90;
+          const y = ph * H;
+          ctx.strokeStyle = 'hsla(' + ((frame * 14 + i * 60) % 360) + ',100%,75%,' + (0.20 * (1 - ph)) + ')';
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(W, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
     }
 
     // SPRINT — chromatic edge split: thin cyan + magenta stripes along the
