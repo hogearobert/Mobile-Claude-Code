@@ -2640,8 +2640,22 @@
     updateWeather();
     if (landBounce > 0.01) landBounce *= 0.8; else landBounce = 0;
 
-    // Player physics — sliding in air = fast-fall dive
-    player.vy += gravity * (player.sliding && !player.onGround ? 2.4 : 1);
+    // Player physics — sliding in air = fast-fall dive. CHARGE JUMP: holding
+    // the screen while ascending shortly after a jump halves gravity, letting
+    // skilled players sustain a higher arc. Released → normal gravity → snappy
+    // hop. Pure additive skill expression; a normal tap-and-release is unchanged.
+    const charging = ptrDown && !player.sliding && !player.onGround
+      && player.vy < 0 && (frame - lastJumpFrame) < 14;
+    const gMul = (player.sliding && !player.onGround) ? 2.4 : (charging ? 0.45 : 1);
+    player.vy += gravity * gMul;
+    // Tiny upward boost-flame motes while charge-holding — telegraphs the tech
+    if (charging && (frame & 1) === 0) {
+      const cx = player.x + player.w / 2;
+      const cy = player.y + player.h;
+      pushParticle(cx + (Math.random() - 0.5) * 8, cy,
+        (Math.random() - 0.5) * 1.2, 1.4 + Math.random() * 1.2,
+        14, 'rgba(255,225,120,0.85)', Math.random() * 1.8 + 1);
+    }
     const fallVy = player.vy;
     player.y += player.vy;
     if (player.y + player.h >= GROUND) {
