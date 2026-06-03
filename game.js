@@ -5022,6 +5022,34 @@
     }
     ctx.restore();
 
+    // DASH READY indicator — when player is airborne with both jumps spent and
+    // hasn't used the dash yet, draw a soft cyan halo + chevron under the orb
+    // so the third-tap availability is unmistakable. Pure UX polish.
+    if (!player.onGround && player.jumps >= player.maxJumps && !dashUsed && dashFrames === 0 && !player.sliding) {
+      const acx = player.x + player.w / 2;
+      const acy = player.y + player.h / 2;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const pulseDR = 0.7 + 0.3 * Math.sin(frame * 0.32);
+      // Subtle ring
+      ctx.strokeStyle = 'rgba(25,240,255,' + (0.55 * pulseDR) + ')';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(acx, acy, 36 + Math.sin(frame * 0.2) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Forward-pointing chevron (sells "dash forward")
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.7 * pulseDR) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(acx + 36, acy - 8);
+      ctx.lineTo(acx + 50, acy);
+      ctx.lineTo(acx + 36, acy + 8);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // High-combo orbital aura — at combo ≥ 25 a constellation of tiny gem
     // motes circles the orb on multiple rings, each rotating at a different
     // rate. Cheap (12 dots total), but visually unmistakable as "you've
