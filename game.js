@@ -517,6 +517,19 @@
       const topReward = 50 + now * 25;
       showToast('⭐ RANG NOU · ' + rankTitle(now), 'Pilot nivel ' + now + '  ·  +' + topReward + ' ★');
       audio.levelup && audio.levelup();
+      // In-canvas burst so the rank-up reads even when the player is looking
+      // at the centred game-over panel instead of the corner toast.
+      for (let i = 0; i < 80; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+        const v = Math.random() * 12 + 5;
+        pushParticle(W / 2 + (Math.random() - 0.5) * 60, GROUND - 120,
+          Math.cos(a) * v, Math.sin(a) * v, 90,
+          ['#ffe14a', '#19f0ff', '#ff3df0', '#fff'][i & 3], Math.random() * 4 + 2);
+      }
+      addRing(W / 2, GROUND - 120, 300, '255,225,74', 50);
+      addRing(W / 2, GROUND - 120, 220, '255,61,240', 40);
+      flashFrame = frame;
+      if (navigator.vibrate) { try { navigator.vibrate([30, 60, 30, 60, 150]); } catch (_) {} }
     }
   }
 
