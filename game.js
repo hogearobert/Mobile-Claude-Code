@@ -2171,6 +2171,7 @@
     player.slideT = 0;
     player.trail = [];
     pendingJump = false;
+    pendingDash = false;
     ptrDown = false;
     obstacles = [];
     coinsArr = [];
@@ -2472,6 +2473,8 @@
   let gestureConsumed = false;
   let pendingJump = false;
   let pendingJumpFrame = 0;
+  let pendingDash = false;     // air-dash deferred the same way as ground-tap,
+  let pendingDashFrame = 0;    // so a swipe-down dive-slam can override it
   const JUMP_DEFER = 3; // frames (~50ms) to disambiguate tap vs swipe
   function startSlide() {
     if (state !== STATE.PLAY) return;
@@ -2484,8 +2487,9 @@
     if (e.cancelable) e.preventDefault();
     audio.resume();
     if (state !== STATE.PLAY) return;
-    // A new touch means any still-pending jump was definitely a tap — commit it.
+    // A new touch means any still-pending input was definitely a tap — commit it.
     if (pendingJump) { pendingJump = false; jump(); }
+    if (pendingDash) { pendingDash = false; airDash(); }
     ptrDown = true;
     gestureConsumed = false;
     ptrStartY = e.clientY || 0;
@@ -2494,18 +2498,24 @@
       pendingJump = true;
       pendingJumpFrame = frame;
     } else if (player.jumps >= player.maxJumps && !dashUsed && !player.sliding) {
-      // Both jumps spent + no dash yet + not in a dive → 3rd tap fires AIR-DASH
-      airDash();
+      // Both jumps spent + no dash yet + not in a dive → 3rd tap is AIR-DASH.
+      // Defer the same way ground-tap is deferred so a swipe-down can convert
+      // this touch into a dive-slam instead (firing instantly here would
+      // pre-empt the swipe gesture and steal the dive).
+      pendingDash = true;
+      pendingDashFrame = frame;
     } else {
-      jump(); // airborne: double-jump fires instantly
+      jump(); // airborne mid-air-jump: double-jump fires instantly
     }
   }
   function onPointerMove(e) {
     if (!ptrDown || gestureConsumed || state !== STATE.PLAY) return;
     const dy = (e.clientY || 0) - ptrStartY;
     if (dy > 30) {
-      // Swipe down → slide. Cancel the pending hop (ground) / abort an air-hop.
+      // Swipe down → slide. Cancel pending hop / pending air-dash so a
+      // dive-slam (swipe-down in air) wins over the deferred input.
       pendingJump = false;
+      pendingDash = false;
       if (frame - lastJumpFrame <= 9 && player.vy < 0) player.vy = 7;
       startSlide();
       gestureConsumed = true;
@@ -3221,6 +3231,15 @@
     if (pendingJump && frame - pendingJumpFrame >= JUMP_DEFER) {
       pendingJump = false;
       jump();
+    }
+    // Same defer logic for AIR-DASH so a swipe-down can convert the 3rd tap
+    // into a dive-slam instead of an unwanted dash.
+    if (pendingDash && frame - pendingDashFrame >= JUMP_DEFER) {
+      pendingDash = false;
+      // Re-check state — a slide/landing may have invalidated the dash
+      if (state === STATE.PLAY && !player.onGround && !player.sliding && !dashUsed) {
+        airDash();
+      }
     }
     const slowmoT = slowmoFrames > 0 ? 0.35 : 1.0;
     if (slowmoFrames > 0) slowmoFrames--;
