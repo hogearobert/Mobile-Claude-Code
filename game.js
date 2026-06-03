@@ -1869,6 +1869,14 @@
         else if (score > best * 0.8) goalMsg = 'Aproape de record (' + diff + ' rămase)';
         else if (score > best * 0.5) goalMsg = best + ' este recordul tău';
       }
+      // Themed superlatives — only fire when there's no record-themed message
+      // already in flight, so the most important news wins the slot.
+      if (!goalMsg) {
+        if (runMaxCombo >= 30) goalMsg = '🔥 LEGENDARY combo ' + runMaxCombo + '!';
+        else if (runMaxCombo >= 20) goalMsg = '🔥 Imparabil! Combo ' + runMaxCombo;
+        else if (runNearMisses >= 8) goalMsg = '💀 ' + runNearMisses + ' near-miss — sânge rece';
+        else if (runAirBonus >= 200) goalMsg = '🚀 Aerian! +' + runAirBonus + ' bonus zbor';
+      }
     }
     const goalEl = document.getElementById('goalMsg');
     if (goalEl) goalEl.textContent = goalMsg;
