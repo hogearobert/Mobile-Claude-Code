@@ -212,6 +212,29 @@ html, body {
   gap: 3px;
   padding-bottom: 5px;
 }
+.chip.level {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 5px;
+  min-width: 70px;
+  text-align: center;
+}
+.level-meter {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+.level-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #19f0ff, #ff3df0);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.18s ease-out;
+}
 .chip.combo.hidden { visibility: hidden; }
 .combo-meter {
   width: 100%;

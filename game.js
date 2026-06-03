@@ -2242,6 +2242,7 @@
   const muteBtn = document.getElementById('muteBtn');
   const pauseBtn = document.getElementById('pauseBtn');
   const levelEl = document.getElementById('level');
+  const levelFillEl = document.getElementById('levelFill');
   const comboEl = document.getElementById('combo');
   const comboTextEl = document.getElementById('comboText');
   const comboFillEl = document.getElementById('comboFill');
@@ -3585,6 +3586,12 @@
     if (levelIdx >= 5 && !hasAch('level_6')) unlock('level_6');
     if (totalCoins + runCoins >= 100 && !hasAch('coins_100')) unlock('coins_100');
     if (frame % 4 === 0) scoreEl.textContent = Math.floor(score);
+    if (frame % 8 === 0 && levelFillEl) {
+      // Progress to next biome (0..1). Capped at 1 for the final biome.
+      const inBiome = dist - levelIdx * LEVEL_SCORE;
+      const ratio = levelIdx >= LEVELS.length - 1 ? 1 : Math.min(1, Math.max(0, inBiome / LEVEL_SCORE));
+      levelFillEl.style.transform = 'scaleX(' + ratio + ')';
+    }
 
     if (shake > 0) shake *= 0.9;
   }
