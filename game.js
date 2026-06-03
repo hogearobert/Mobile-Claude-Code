@@ -2477,6 +2477,23 @@
       music.duck();
       missionEvent('level', levelIdx);
       music.setLevel(levelIdx);
+      // Final-biome milestone — extra spectacle when the player reaches ULTRA,
+      // marking the cap of the level progression. Fires once per level-up, not
+      // every frame.
+      if (levelIdx === LEVELS.length - 1) {
+        popText('✨ ULTRA — BIOM MAX ✨', W / 2, GROUND - 260, '#ff3df0', 1.8);
+        addRing(W / 2, GROUND - 160, 320, '255,61,240', 50);
+        addRing(W / 2, GROUND - 160, 240, '25,240,255', 42);
+        addFever(0.25);
+        slowmoFrames = Math.max(slowmoFrames, 16);
+        for (let i = 0; i < 60; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const v = Math.random() * 10 + 4;
+          pushParticle(W / 2, GROUND - 140, Math.cos(a) * v, Math.sin(a) * v, 80,
+            ['#ff3df0', '#19f0ff', '#ffe14a', '#fff'][i & 3], Math.random() * 4 + 2);
+        }
+        if (navigator.vibrate) { try { navigator.vibrate([20, 50, 20, 50, 200]); } catch (_) {} }
+      }
     }
   }
 
