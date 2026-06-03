@@ -598,11 +598,6 @@
   }
 
   let scrollX = 0;
-  // Tron-style ground rail — bright glowing segments laid down beneath the
-  // player as they run/slide. Each segment scrolls with the world and fades
-  // out. Capped to a small ring buffer for cheap render.
-  let groundRail = [];
-  const GROUND_RAIL_CAP = 60;
   let speed = 6;
   const baseSpeed = 4.6;
   const BASE_GRAVITY = 0.95;
@@ -1972,7 +1967,6 @@
     lastCoinFrame = -1000;
     lastCoinX = 0; lastCoinY = 0;
     coinChains = [];
-    groundRail = [];
     powerups = [];
     springs = [];
     // COSMIC skin: kick off the run with a free magnet window
@@ -3063,36 +3057,6 @@
     // Slide squash animation (0 = standing, 1 = fully crouched)
     const slideTarget = player.sliding && player.onGround ? 1 : 0;
     player.slideT += (slideTarget - player.slideT) * 0.35;
-
-    // GROUND RAIL — lay down a glowing trail segment beneath the player while
-    // on the ground. Sampled every other frame so we don't blow the cap on
-    // long runs. The first segment after a jump-landing seeds with a "spark"
-    // life burst, so the rail visibly re-ignites with each landing.
-    if (player.onGround && (frame & 1) === 0) {
-      const seg = {
-        x: player.x + player.w / 2,
-        y: GROUND,
-        life: 60,
-        spark: airframes === 0 && frame > 6 ? 1 : 0
-      };
-      if (groundRail.length >= GROUND_RAIL_CAP) groundRail.shift();
-      groundRail.push(seg);
-    }
-    // Scroll + decay rail
-    if (groundRail.length) {
-      for (let i = 0; i < groundRail.length; i++) {
-        groundRail[i].x -= speed;
-        groundRail[i].life--;
-      }
-      // Filter out expired or off-screen segments in-place
-      let w = 0;
-      for (let i = 0; i < groundRail.length; i++) {
-        if (groundRail[i].life > 0 && groundRail[i].x > -20) {
-          groundRail[w++] = groundRail[i];
-        }
-      }
-      groundRail.length = w;
-    }
 
     // Running dust — tiny motes kicked up from under the orb at speed. Density
     // ramps in smoothly above speed 6.5; capped at one mote per other-frame so
@@ -4196,58 +4160,6 @@
       }
       ctx.restore();
     }
-  }
-
-  // Tron-style ground rail — bright glowing line stitched through every
-  // segment laid down behind the player, fading by life. Hue picks up the
-  // current skin colour, or hue-cycles during OVERDRIVE / PRISM biome.
-  function drawGroundRail() {
-    if (!groundRail.length) return;
-    const sk = currentSkin();
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
-    // Outer glow stroke — thick translucent line
-    ctx.beginPath();
-    let started = false;
-    for (let i = 0; i < groundRail.length; i++) {
-      const s = groundRail[i];
-      if (!started) { ctx.moveTo(s.x, s.y); started = true; }
-      else ctx.lineTo(s.x, s.y);
-    }
-    let trailRGB = sk.trail;
-    if (feverActive || palette.prism) {
-      const hue = (frame * (feverActive ? 6 : 3)) % 360;
-      const h6 = (hue / 60) % 6;
-      const X = 255 * (1 - Math.abs((h6 % 2) - 1));
-      const map = [[255, X, 0], [X, 255, 0], [0, 255, X], [0, X, 255], [X, 0, 255], [255, 0, X]];
-      const m = map[Math.floor(h6)];
-      trailRGB = (m[0] | 0) + ',' + (m[1] | 0) + ',' + (m[2] | 0);
-    }
-    ctx.strokeStyle = 'rgba(' + trailRGB + ',0.30)';
-    ctx.lineWidth = 8;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(' + trailRGB + ',0.55)';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    // Spark cues — small bright dots where a landing/restart happened
-    for (let i = 0; i < groundRail.length; i++) {
-      const s = groundRail[i];
-      if (!s.spark) continue;
-      const k = s.life / 60;
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.9 * k) + ')';
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 3 + (1 - k) * 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(' + trailRGB + ',' + (0.65 * k) + ')';
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 6 + (1 - k) * 6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
   }
 
   function drawPlayer() {
@@ -5636,7 +5548,6 @@
     drawBackground();
     drawWeather();
     drawGround();
-    drawGroundRail();
     drawReflections();
     drawSpeedLines();
     drawSetpieceBoss();
