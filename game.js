@@ -3815,13 +3815,23 @@
     ctx.fillRect(cx - R * 1.7, cy - R * 1.7, R * 3.4, R * 3.4);
     ctx.globalCompositeOperation = 'source-over';
 
-    // Sun body with rich vertical gradient (top bright → bottom saturated)
+    // Sun body with rich vertical gradient (top bright → bottom saturated).
+    // PRISM biome: the sun itself becomes a rainbow disc, cycling vertically.
     const body = ctx.createLinearGradient(0, cy - R, 0, cy + R);
-    body.addColorStop(0,    '#fffbe6');
-    body.addColorStop(0.18, '#ffe14a');
-    body.addColorStop(0.5,  palette.sun);
-    body.addColorStop(0.82, 'rgba(' + palette.sunRGB + ', 0.95)');
-    body.addColorStop(1,    'rgba(' + palette.sunRGB + ', 0.55)');
+    if (palette.prism) {
+      const baseHue = (frame * 1.5) % 360;
+      body.addColorStop(0,    '#fffbe6');
+      body.addColorStop(0.20, 'hsl(' + baseHue + ',95%,72%)');
+      body.addColorStop(0.50, 'hsl(' + (baseHue + 120) % 360 + ',95%,55%)');
+      body.addColorStop(0.82, 'hsla(' + (baseHue + 240) % 360 + ',95%,55%,0.95)');
+      body.addColorStop(1,    'hsla(' + (baseHue + 280) % 360 + ',95%,45%,0.55)');
+    } else {
+      body.addColorStop(0,    '#fffbe6');
+      body.addColorStop(0.18, '#ffe14a');
+      body.addColorStop(0.5,  palette.sun);
+      body.addColorStop(0.82, 'rgba(' + palette.sunRGB + ', 0.95)');
+      body.addColorStop(1,    'rgba(' + palette.sunRGB + ', 0.55)');
+    }
     ctx.fillStyle = body;
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
