@@ -3869,6 +3869,25 @@
     ctx.fillStyle = palette.ground;
     ctx.fillRect(0, GROUND, W, H - GROUND);
 
+    // PRISM ground — rainbow horizontal shimmer pulses across the floor,
+    // anchored to scrollX so it tracks with the world while hue rotates
+    // through the full spectrum every ~6 seconds.
+    if (palette.prism) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const baseHue = (frame * 1.2) % 360;
+      const stops = 8;
+      const grad = ctx.createLinearGradient(0, 0, W, 0);
+      for (let i = 0; i <= stops; i++) {
+        const t = i / stops;
+        const hue = (baseHue + t * 360 + scrollX * 0.6) % 360;
+        grad.addColorStop(t, 'hsla(' + hue + ',90%,55%,0.28)');
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, GROUND, W, H - GROUND);
+      ctx.restore();
+    }
+
     ensureEnvGradients();
     // Atmospheric haze band at the horizon
     ctx.fillStyle = envCache.haze;
@@ -5310,6 +5329,27 @@
       }
       ctx.fillStyle = hg;
       ctx.fillRect(0, 0, W, H);
+    }
+
+    // SPRINT — chromatic edge split: thin cyan + magenta stripes along the
+    // left/right of the screen that throb harder while sprinting. Sells the
+    // hyperspeed by literally pushing RGB out of the screen edges.
+    if (state === STATE.PLAY && sprintFrames > 0) {
+      const k = Math.min(1, sprintFrames / 25);
+      const w = 18 + Math.sin(frame * 0.4) * 6;
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const lg = ctx.createLinearGradient(0, 0, w, 0);
+      lg.addColorStop(0, 'rgba(255,61,200,' + (0.4 * k) + ')');
+      lg.addColorStop(1, 'rgba(255,61,200,0)');
+      ctx.fillStyle = lg;
+      ctx.fillRect(0, 0, w, H);
+      const rg = ctx.createLinearGradient(W - w, 0, W, 0);
+      rg.addColorStop(0, 'rgba(25,240,255,0)');
+      rg.addColorStop(1, 'rgba(25,240,255,' + (0.4 * k) + ')');
+      ctx.fillStyle = rg;
+      ctx.fillRect(W - w, 0, w, H);
+      ctx.restore();
     }
 
     // Subtle CRT scanlines + corner vignette — synthwave authenticity layer.
