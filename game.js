@@ -4253,6 +4253,22 @@
       const len = 120 + Math.sin(frame * 0.6) * 18;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      // Triple after-image — three ghost orbs streaming behind the player at
+      // increasing offsets and fading alphas. Reads viscerally as "I'm leaving
+      // light behind me."
+      for (let i = 1; i <= 3; i++) {
+        const ox = -i * (12 + speed * 0.3);
+        const a = (0.30 - i * 0.07) * intensity;
+        if (a <= 0.02) continue;
+        const eg = ctx.createRadialGradient(cx + ox, cy, 0, cx + ox, cy, baseR * 1.6);
+        eg.addColorStop(0, 'rgba(' + sk.trail + ',' + (a + 0.15) + ')');
+        eg.addColorStop(0.6, 'rgba(' + sk.trail + ',' + (a * 0.5) + ')');
+        eg.addColorStop(1, 'rgba(' + sk.trail + ',0)');
+        ctx.fillStyle = eg;
+        ctx.beginPath();
+        ctx.arc(cx + ox, cy, baseR * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
       const jet = ctx.createLinearGradient(cx - len, cy, cx + 4, cy);
       jet.addColorStop(0, 'rgba(255,255,255,0)');
       jet.addColorStop(0.5, 'rgba(255,255,255,' + (0.20 * intensity).toFixed(3) + ')');
