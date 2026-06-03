@@ -2751,10 +2751,14 @@
       }
     }
 
-    // Trail
-    if (frame % 2 === 0) {
+    // Trail — length scales with combo (longer = hotter streak). Cap at 28
+    // segments so memory + draw cost stay bounded. Sample every frame at high
+    // combo for a denser, smoother streak.
+    const trailCap = 12 + Math.min(16, Math.floor(combo / 4));
+    const sampleEvery = combo >= 20 ? 1 : 2;
+    if (frame % sampleEvery === 0) {
       player.trail.push({ x: player.x + player.w / 2, y: player.y + player.h / 2, life: 20 });
-      if (player.trail.length > 12) player.trail.shift();
+      if (player.trail.length > trailCap) player.trail.shift();
     }
     player.trail.forEach((t) => t.life--);
     player.trail = player.trail.filter((t) => t.life > 0);
