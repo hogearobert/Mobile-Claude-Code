@@ -4425,12 +4425,26 @@
       ctx.fillStyle = g;
       ctx.fillRect(sh.x, 0, sh.w, H);
     }
-    // Dust motes — tiny bright specks closest to the lens
-    for (const mo of fgMotes) {
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.18 + 0.16 * Math.sin(mo.tw)) + ')';
-      ctx.beginPath();
-      ctx.arc(mo.x, mo.y, mo.r, 0, Math.PI * 2);
-      ctx.fill();
+    // Dust motes — tiny bright specks closest to the lens. During OVERDRIVE
+    // they shift hot-pink and stretch into short streaks so the whole scene
+    // visibly screams the multiplier.
+    if (feverActive) {
+      for (const mo of fgMotes) {
+        const a = 0.35 + 0.25 * Math.sin(mo.tw);
+        const streakLen = 4 + mo.r * 2;
+        const g = ctx.createLinearGradient(mo.x, mo.y, mo.x + streakLen, mo.y);
+        g.addColorStop(0, 'rgba(255,80,220,' + a + ')');
+        g.addColorStop(1, 'rgba(255,80,220,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(mo.x, mo.y - mo.r, streakLen, mo.r * 2);
+      }
+    } else {
+      for (const mo of fgMotes) {
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.18 + 0.16 * Math.sin(mo.tw)) + ')';
+        ctx.beginPath();
+        ctx.arc(mo.x, mo.y, mo.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.restore();
   }
