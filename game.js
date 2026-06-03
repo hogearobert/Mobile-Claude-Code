@@ -966,10 +966,14 @@
     // Variable reward: small / medium / big with weighted probabilities
     const r = rnd();
     let reward;
-    if (r < 0.55) {
+    if (r < 0.45) {
       reward = { coins: 10 + Math.floor(rnd() * 15), msg: 'BONUS!', col: '#ffe14a' };
-    } else if (r < 0.85) {
+    } else if (r < 0.72) {
       reward = { coins: 30 + Math.floor(rnd() * 25), msg: 'MEGA BONUS!', col: '#ff3df0', extra: 'shield' };
+    } else if (r < 0.88) {
+      // TIME WARP — 4 seconds of dramatic slowmo so the player can thread
+      // through everything coming at them. A rare, exciting variable reward.
+      reward = { coins: 50 + Math.floor(rnd() * 30), msg: '⏱ TIME WARP!', col: '#19f0ff', extra: 'timewarp' };
     } else if (r < 0.97) {
       reward = { coins: 80 + Math.floor(rnd() * 40), msg: 'JACKPOT!', col: '#19f0ff', extra: 'magnet' };
     } else {
@@ -977,6 +981,10 @@
     }
     runCoins += reward.coins;
     if (reward.extra === 'shield') shieldActive = true;
+    else if (reward.extra === 'timewarp') {
+      slowmoFrames = Math.max(slowmoFrames, 60 * 4);
+      glitchFrame = frame;
+    }
     else if (reward.extra === 'magnet') magnetFrames = 60 * 6;
     popText(reward.msg + ' +' + reward.coins + '★', player.x + player.w / 2, GROUND - 220, reward.col, 1.4);
     audio.power();
