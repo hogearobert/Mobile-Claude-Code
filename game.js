@@ -122,6 +122,13 @@
         // Snap back when warp expires — a sharp upward chirp
         blip(330, 0.12, 'sine', 0.18, 880);
       },
+      trick(tier) {
+        // Air-trick chord — rising arpeggio whose pitch escalates with tier.
+        const base = 440 + tier * 90;
+        blip(base,        0.08, 'sine',     0.20);
+        setTimeout(() => blip(base * 1.25, 0.10, 'triangle', 0.22), 50);
+        setTimeout(() => blip(base * 1.5,  0.14, 'sine',     0.25), 110);
+      },
       toggle() {
         muted = !muted;
         try { localStorage.setItem('glitchrun.v1.mute', muted ? '1' : '0'); } catch (_) {}
@@ -3303,6 +3310,7 @@
             popText(tier.name + ' +' + award, pcx, pcy - 60, tier.col, tier.sz);
             addRing(pcx, pcy, 60 + airTricks * 8, '255,225,74', 22);
             addFever(0.04 + airTricks * 0.02);
+            audio.trick && audio.trick(Math.min(airTricks - 2, 3));
             if (airTricks === 2 && !hasAch('trick_combo')) unlock('trick_combo');
             if (airTricks >= 4 && !hasAch('trick_pro')) unlock('trick_pro');
             if (navigator.vibrate && airTricks >= 3) { try { navigator.vibrate([10, 20, 30]); } catch (_) {} }
