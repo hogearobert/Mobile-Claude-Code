@@ -800,20 +800,21 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
-  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'tornado'];
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado'];
   function startSetpiece() {
     const type = SETPIECE_TYPES[setpieceCount % SETPIECE_TYPES.length];
     setpieceCount++;
     nextSetpieceAt += 1300;
-    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : type === 'meteor' ? 540 : 560;
+    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : type === 'meteor' ? 540 : type === 'storm' ? 480 : 560;
     setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
     // LOW-G: float section — soften gravity for a dreamy, hang-time coin harvest
     if (type === 'lowg') { gravity = BASE_GRAVITY * 0.42; showTipOnce('lowg', '🌙 LOW-G', 'Gravitație redusă — sari mult mai sus!'); }
     if (type === 'meteor') { showTipOnce('meteor', '☄ METEOR', 'Evită zonele marcate cu portocaliu pe sol!'); }
-    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : type === 'lowg' ? '🌙 LOW-G 🌙' : type === 'meteor' ? '☄ METEOR SHOWER ☄' : '⚡ GAUNTLET ⚡';
-    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : type === 'lowg' ? '#8ad8ff' : type === 'meteor' ? '#ff7a3d' : '#ff3d6e';
+    if (type === 'storm') { showTipOnce('storm', '⛈ STORM', 'Toate tipurile de obstacole în același timp — supraviețuiește!'); }
+    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : type === 'lowg' ? '🌙 LOW-G 🌙' : type === 'meteor' ? '☄ METEOR SHOWER ☄' : type === 'storm' ? '⛈ STORM ⛈' : '⚡ GAUNTLET ⚡';
+    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : type === 'lowg' ? '#8ad8ff' : type === 'meteor' ? '#ff7a3d' : type === 'storm' ? '#19f0ff' : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
     flashFrame = frame;
@@ -883,6 +884,25 @@
           setpiece.spawnTimer = 50;
         }
       }
+    } else if (setpiece.type === 'storm') {
+      // STORM — every hazard type at high cadence with lightning flickers, plus
+      // occasional bonus coin arcs to reward steady reads. Tests the player's
+      // ability to switch mechanics on the fly: jump, slide, dive-slam.
+      if (setpiece.spawnTimer <= 0) {
+        const r = rnd();
+        if (r < 0.30) makeObstacle('spike', W + 20);
+        else if (r < 0.55) makeObstacle('overhang', W + 20);
+        else if (r < 0.75) makeObstacle('flying', W + 20);
+        else if (r < 0.92) makeObstacle('block', W + 20);
+        else {
+          // bonus coin pickup arc
+          const by = GROUND - 110 - rnd() * 80;
+          for (let i = 0; i < 4; i++) coinsArr.push({ x: W + 30 + i * 28, y: by, r: 14, picked: false, type: rollGem(), t: rnd() * 6.28 });
+        }
+        setpiece.spawnTimer = 38 + Math.floor(rnd() * 18);
+      }
+      // Random lightning crack adds chaos atmosphere — purely visual
+      if (rnd() < 0.012) { lightningFrame = frame; makeBolt && makeBolt(); if (audio.thunder) audio.thunder(); }
     } else if (setpiece.type === 'lowg') {
       // Floaty harvest — tall coin arcs reachable thanks to the long hang-time,
       // with the occasional wide-spaced hazard so it isn't a pure freebie.
@@ -938,6 +958,13 @@
         shake = Math.max(shake, 10);
         audio.power();
         if (!hasAch('meteor_dodge')) unlock('meteor_dodge');
+      } else if (setpiece.type === 'storm') {
+        runCoins += 120;
+        popText('+120 ★  STORM CALM!', W / 2, GROUND - 200, '#19f0ff', 1.55);
+        addRing(W / 2, GROUND - 120, 220, '120,230,255', 36);
+        addFever(0.2);
+        shake = Math.max(shake, 11);
+        audio.power();
       }
       setpiece = null;
       nextObstacleAt = frame + 75;
@@ -4835,6 +4862,7 @@
       if (setpiece.type === 'coinrush') { washRGB = '255, 200, 40'; barRGB = '255,225,74'; }
       else if (setpiece.type === 'lowg') { washRGB = '120, 200, 255'; barRGB = '140,210,255'; }
       else if (setpiece.type === 'meteor') { washRGB = '255, 140, 60'; barRGB = '255,140,60'; }
+      else if (setpiece.type === 'storm') { washRGB = '120, 230, 255'; barRGB = '120,230,255'; }
       else if (setpiece.type === 'tornado') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
       ctx.fillStyle = 'rgba(' + washRGB + ',0.08)';
       ctx.fillRect(0, 0, W, H);
