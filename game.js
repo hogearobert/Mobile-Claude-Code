@@ -622,7 +622,10 @@
     { name: 'MIDNIGHT', sky: ['#020512', '#060f2e', '#0a1640'], sun: '#7da8ff', sunRGB: '125,168,255', mountainHue: 230, accent: '140,170,255', ground: '#020512', weather: 'snow' },
     { name: 'MAGMA',    sky: ['#160404', '#3d0a06', '#5a1404'], sun: '#ff5a14', sunRGB: '255,100,30',  mountainHue: 12,  accent: '255,120,40',  ground: '#160404', weather: 'embers' },
     { name: 'AURORA',   sky: ['#04140f', '#0a3d3a', '#0a3d52'], sun: '#3dffd0', sunRGB: '100,255,210', mountainHue: 165, accent: '120,255,220', ground: '#04140f', weather: 'snow' },
-    { name: 'ULTRA',    sky: ['#1a0a1a', '#3d0a3d', '#52145a'], sun: '#ff3df0', sunRGB: '255,80,240',  mountainHue: 300, accent: '255,120,255', ground: '#1a0a1a', weather: 'leaves' }
+    { name: 'ULTRA',    sky: ['#1a0a1a', '#3d0a3d', '#52145a'], sun: '#ff3df0', sunRGB: '255,80,240',  mountainHue: 300, accent: '255,120,255', ground: '#1a0a1a', weather: 'leaves' },
+    // PRISM — endgame rainbow biome, palette is a placeholder; the actual sky
+    // hue cycles every frame inside drawBackground for a living spectrum effect.
+    { name: 'PRISM',    sky: ['#0a0418', '#1a063a', '#3a0a52'], sun: '#ffffff', sunRGB: '255,255,255', mountainHue: 0,   accent: '255,255,255', ground: '#0a0418', weather: 'none', prism: true }
   ];
   const LEVEL_SCORE = 500;
   let levelIdx = 0;
@@ -645,7 +648,12 @@
   let sprintFrames = 0;
   let phaseFrames = 0;       // PHASE power-up — ghost through obstacles, shatter them
   let phaseStreak = 0;       // obstacles vaporised in the current phase window
+  let timewarpFrames = 0;    // TIME WARP — slows obstacles, NOT the player (skill expression window)
+  let lifeTimewarps = parseInt(readLS('glitchrun.v1.lifeTimewarps', '0'), 10) || 0;
   function sprintMult() { return sprintFrames > 0 ? 1.5 : 1; }
+  // Obstacle/coin/meteor scroll multiplier — TIME WARP halves world velocity
+  // while leaving the player's vertical physics untouched. Pure skill-window.
+  function worldSlow() { return timewarpFrames > 0 ? 0.42 : 1; }
   let shieldFlashFrame = -1000;
   let invincibleUntil = -1;
   let reviveUsed = false;
@@ -795,12 +803,12 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
-  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado'];
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado', 'hyperspace'];
   function startSetpiece() {
     const type = SETPIECE_TYPES[setpieceCount % SETPIECE_TYPES.length];
     setpieceCount++;
     nextSetpieceAt += 1300;
-    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : type === 'meteor' ? 540 : type === 'storm' ? 480 : 560;
+    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : type === 'meteor' ? 540 : type === 'storm' ? 480 : type === 'hyperspace' ? 460 : 560;
     setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
@@ -808,8 +816,27 @@
     if (type === 'lowg') { gravity = BASE_GRAVITY * 0.42; showTipOnce('lowg', '🌙 LOW-G', 'Gravitație redusă — sari mult mai sus!'); }
     if (type === 'meteor') { showTipOnce('meteor', '☄ METEOR', 'Evită zonele marcate cu portocaliu pe sol!'); }
     if (type === 'storm') { showTipOnce('storm', '⛈ STORM', 'Toate tipurile de obstacole în același timp — supraviețuiește!'); }
-    const label = type === 'coinrush' ? '★ COIN RUSH ★' : type === 'tornado' ? '🌪 TORNADO 🌪' : type === 'lowg' ? '🌙 LOW-G 🌙' : type === 'meteor' ? '☄ METEOR SHOWER ☄' : type === 'storm' ? '⛈ STORM ⛈' : '⚡ GAUNTLET ⚡';
-    const col = type === 'coinrush' ? '#ffe14a' : type === 'tornado' ? '#b478ff' : type === 'lowg' ? '#8ad8ff' : type === 'meteor' ? '#ff7a3d' : type === 'storm' ? '#19f0ff' : '#ff3d6e';
+    if (type === 'hyperspace') {
+      showTipOnce('hyperspace', '🌌 HYPERSPACE', 'Tunel de stele — colectează tot ce poți!');
+      // Hyperspace skips obstacles entirely; clear everything in front so the
+      // tunnel reads as a clean burst of momentum.
+      obstacles = obstacles.filter((o) => o.x < W * 0.30);
+      meteors = [];
+    }
+    const label = type === 'coinrush' ? '★ COIN RUSH ★'
+                : type === 'tornado' ? '🌪 TORNADO 🌪'
+                : type === 'lowg' ? '🌙 LOW-G 🌙'
+                : type === 'meteor' ? '☄ METEOR SHOWER ☄'
+                : type === 'storm' ? '⛈ STORM ⛈'
+                : type === 'hyperspace' ? '🌌 HYPERSPACE 🌌'
+                : '⚡ GAUNTLET ⚡';
+    const col = type === 'coinrush' ? '#ffe14a'
+              : type === 'tornado' ? '#b478ff'
+              : type === 'lowg' ? '#8ad8ff'
+              : type === 'meteor' ? '#ff7a3d'
+              : type === 'storm' ? '#19f0ff'
+              : type === 'hyperspace' ? '#b478ff'
+              : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
     flashFrame = frame;
@@ -898,6 +925,37 @@
       }
       // Random lightning crack adds chaos atmosphere — purely visual
       if (rnd() < 0.012) { lightningFrame = frame; makeBolt && makeBolt(); if (audio.thunder) audio.thunder(); }
+    } else if (setpiece.type === 'hyperspace') {
+      // HYPERSPACE — pure dopamine zone: dense coin streams at multiple altitudes,
+      // no obstacles, auto-magnet topped up. Visual tunnel is in draw().
+      magnetFrames = Math.max(magnetFrames, 8);
+      if (setpiece.spawnTimer <= 0) {
+        const lane = Math.floor(rnd() * 3); // 3 altitude lanes
+        const baseY = lane === 0 ? GROUND - 70 : lane === 1 ? GROUND - 170 : GROUND - 270;
+        const n = 5 + Math.floor(rnd() * 4);
+        for (let i = 0; i < n; i++) {
+          coinsArr.push({
+            x: W + 30 + i * 26,
+            y: baseY + Math.sin(i * 0.7 + setpiece.t * 0.02) * 22,
+            r: 14, picked: false,
+            type: rollGem(),
+            t: rnd() * 6.28
+          });
+        }
+        setpiece.spawnTimer = 14 + Math.floor(rnd() * 8);
+      }
+      // Occasional gem cluster for big bonus
+      if (rnd() < 0.012) {
+        const baseY = GROUND - 130 - rnd() * 120;
+        for (let i = 0; i < 4; i++) {
+          coinsArr.push({
+            x: W + 60 + i * 22, y: baseY,
+            r: 14, picked: false,
+            type: rnd() < 0.5 ? 'blue' : 'star',
+            t: rnd() * 6.28
+          });
+        }
+      }
     } else if (setpiece.type === 'lowg') {
       // Floaty harvest — tall coin arcs reachable thanks to the long hang-time,
       // with the occasional wide-spaced hazard so it isn't a pure freebie.
@@ -960,6 +1018,15 @@
         addFever(0.2);
         shake = Math.max(shake, 11);
         audio.power();
+      } else if (setpiece.type === 'hyperspace') {
+        runCoins += 90;
+        popText('+90 ★  HYPER COMPLETE!', W / 2, GROUND - 200, '#b478ff', 1.6);
+        addRing(W / 2, GROUND - 120, 240, '180,120,255', 40);
+        addRing(W / 2, GROUND - 120, 180, '120,230,255', 32);
+        addFever(0.18);
+        shake = Math.max(shake, 9);
+        audio.power();
+        if (!hasAch('hyperspace')) unlock('hyperspace');
       }
       setpiece = null;
       nextObstacleAt = frame + 75;
@@ -1056,7 +1123,11 @@
     { id: 'slam_master',   name: 'Maestrul Slam',       desc: '100 de obstacole distruse cu Slam', reward: 200 },
     { id: 'phase_lord',    name: 'Stăpânul Fantomă',    desc: '25 de Phase-uri folosite',      reward: 200 },
     { id: 'meteor_dodge',  name: 'Cer Senin',           desc: 'Supraviețuiește unui Meteor Shower', reward: 120 },
-    { id: 'score_10000',   name: 'Astronautul',         desc: 'Atinge 10.000 scor',             reward: 300 }
+    { id: 'score_10000',   name: 'Astronautul',         desc: 'Atinge 10.000 scor',             reward: 300 },
+    { id: 'timewarp_first', name: 'Cronomancer',        desc: 'Activează TIME WARP',           reward: 30 },
+    { id: 'timewarp_master', name: 'Stăpân al Timpului', desc: '20 de TIME WARP folosite',     reward: 220 },
+    { id: 'hyperspace',    name: 'Hyperspeed',           desc: 'Supraviețuiește un HYPERSPACE', reward: 110 },
+    { id: 'prism_biome',   name: 'Spectrum',             desc: 'Ajunge la biomul PRISM',        reward: 350 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
   // In-memory unlock cache — avoids a synchronous localStorage read per trophy
@@ -1111,7 +1182,11 @@
     { id: 'titan',   name: 'TITAN',   cost: 6000, locked: true, core:['#fff','#ffe0b0','#ff8a1e','#7a3200'], halo:['rgba(255,140,40,0.6)','rgba(255,80,20,0.25)'],   ring:'rgba(255,170,90,0.8)',  trail:'255,150,60',  perk:{ type:'slam',    val:0.7,  label:'+70% rază Dive-Slam' } },
     { id: 'phantom', name: 'PHANTOM', cost: 7500, locked: true, animated: true, core:['#fff','#dccfff','#9876ff','#2a0f6e'], halo:['rgba(160,110,255,0.6)','rgba(100,60,200,0.25)'], ring:'rgba(200,160,255,0.85)', trail:'200,160,255', perk:{ type:'phase',   val:2,    label:'+2s la PHASE' } },
     // Rank-gated reward skin — earned by reaching pilot rank, not bought
-    { id: 'void',    name: 'VOID',    cost: 0, locked: true, rankReq: 5, animated: true, core:['#fff','#d8c8ff','#7a3dff','#1a0640'], halo:['rgba(140,80,255,0.6)','rgba(80,40,200,0.25)'], ring:'rgba(180,120,255,0.9)', trail:'160,110,255', perk:{ type:'gem', val:1.0, label:'+100% șansă gem' } }
+    { id: 'void',    name: 'VOID',    cost: 0, locked: true, rankReq: 5, animated: true, core:['#fff','#d8c8ff','#7a3dff','#1a0640'], halo:['rgba(140,80,255,0.6)','rgba(80,40,200,0.25)'], ring:'rgba(180,120,255,0.9)', trail:'160,110,255', perk:{ type:'gem', val:1.0, label:'+100% șansă gem' } },
+    // TEMPO — premium time-warp skin
+    { id: 'tempo',   name: 'TEMPO',   cost: 5500, locked: true, animated: true, core:['#fff','#d4f0ff','#19f0ff','#0a4a6e'], halo:['rgba(120,230,255,0.65)','rgba(80,200,255,0.25)'], ring:'rgba(180,240,255,0.85)', trail:'130,230,255', perk:{ type:'timewarp', val:1, label:'+1s la TIME WARP' } },
+    // PRISM — rainbow rank-gated endgame trophy skin (rank 8 — long-tail goal)
+    { id: 'prism',   name: 'PRISM',   cost: 0, locked: true, rankReq: 8, animated: true, core:['#fff','#ffe0ff','#ff80c0','#3a0a52'], halo:['rgba(255,180,255,0.65)','rgba(100,200,255,0.25)'], ring:'rgba(255,255,255,0.95)', trail:'255,180,255', perk:{ type:'combo', val:0.20, label:'+20% fereastră combo' } }
   ];
   function perkVal(type) {
     const sk = currentSkin();
@@ -1143,7 +1218,8 @@
     { id: 'overdrive_x', type: 'event', mk: () => ({ goal: 1 }),                                            label: () => 'Declanșează OVERDRIVE', reward: 60 },
     { id: 'near_miss_x', type: 'event', mk: () => ({ goal: 5 + Math.floor(Math.random()*5) }),             label: (m) => 'Fă ' + m.goal + ' near-miss', reward: 50 },
     { id: 'phase_x',    type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează PHASE de ' + m.goal + ' ori', reward: 55 },
-    { id: 'slam_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*4) }),              label: (m) => 'Distruge ' + m.goal + ' obstacole cu Dive-Slam', reward: 50 }
+    { id: 'slam_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*4) }),              label: (m) => 'Distruge ' + m.goal + ' obstacole cu Dive-Slam', reward: 50 },
+    { id: 'timewarp_x', type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează TIME WARP de ' + m.goal + ' ori', reward: 55 }
   ];
   const MK = { current: SK.skinUnlocked + '.current' };
 
@@ -1196,6 +1272,7 @@
       else if (m.id === 'overdrive_x' && type === 'overdrive') inc = 1;
       else if (m.id === 'phase_x' && type === 'phase') inc = 1;
       else if (m.id === 'slam_x' && type === 'slam') inc = value || 1;
+      else if (m.id === 'timewarp_x' && type === 'timewarp') inc = 1;
       else if (m.id === 'score_x' && type === 'gameover' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'combo_x' && type === 'combo' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'level_x' && type === 'level' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
@@ -1777,6 +1854,7 @@
     phaseStreak = 0;
     shieldActive = false;
     sprintFrames = 0;
+    timewarpFrames = 0;
     shieldFlashFrame = -1000;
     invincibleUntil = -1;
     reviveUsed = false;
@@ -2122,6 +2200,7 @@
   const pwShieldEl = document.getElementById('pwShield');
   const pwSprintEl = document.getElementById('pwSprint');
   const pwPhaseEl = document.getElementById('pwPhase');
+  const pwTimewarpEl = document.getElementById('pwTimewarp');
   const recordBadgeEl = bestEl ? bestEl.closest('.badge') : null;
   const recProgFillEl = document.getElementById('recProgFill');
   function updateRecordProgress() {
@@ -2160,6 +2239,14 @@
       if (on) {
         const f = pwPhaseEl.querySelector('.pf');
         if (f) f.style.transform = 'scaleX(' + Math.min(1, phaseFrames / (60 * 5)) + ')';
+      }
+    }
+    if (pwTimewarpEl) {
+      const on = timewarpFrames > 0;
+      pwTimewarpEl.classList.toggle('hidden', !on);
+      if (on) {
+        const f = pwTimewarpEl.querySelector('.pf');
+        if (f) f.style.transform = 'scaleX(' + Math.min(1, timewarpFrames / (60 * 5)) + ')';
       }
     }
   }
@@ -2407,7 +2494,8 @@
 
   function spawnPowerup() {
     // Weighted pool — PHASE (ghost mode) is the rare, exciting drop.
-    const pool = ['magnet', 'magnet', 'shield', 'shield', 'sprint', 'sprint', 'phase'];
+    // TIME WARP is uncommon: slows the world, hugely empowering at high speed.
+    const pool = ['magnet', 'magnet', 'shield', 'shield', 'sprint', 'sprint', 'phase', 'timewarp'];
     const t = pool[Math.floor(rnd() * pool.length)];
     const p = {
       type: t,
@@ -2451,6 +2539,24 @@
       music.duck();
       missionEvent('level', levelIdx);
       music.setLevel(levelIdx);
+      if (palette.prism) {
+        // PRISM is the new endgame cap — extra cinematic burst beyond ULTRA's.
+        if (!hasAch('prism_biome')) unlock('prism_biome');
+        popText('🌈 PRISM — SPECTRUM ZONE 🌈', W / 2, GROUND - 290, '#fff', 1.9);
+        addRing(W / 2, GROUND - 180, 360, '255,140,255', 56);
+        addRing(W / 2, GROUND - 180, 280, '120,230,255', 48);
+        addRing(W / 2, GROUND - 180, 200, '255,225,74',  40);
+        addFever(0.30);
+        slowmoFrames = Math.max(slowmoFrames, 20);
+        for (let i = 0; i < 80; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const v = Math.random() * 12 + 5;
+          const hue = (i * 137) % 360;
+          pushParticle(W / 2, GROUND - 160, Math.cos(a) * v, Math.sin(a) * v, 95,
+            'hsl(' + hue + ',95%,70%)', Math.random() * 4 + 2);
+        }
+        if (navigator.vibrate) { try { navigator.vibrate([30, 60, 30, 60, 30, 60, 300]); } catch (_) {} }
+      }
       // Final-biome milestone — extra spectacle when the player reaches ULTRA,
       // marking the cap of the level progression. Fires once per level-up, not
       // every frame.
@@ -2868,27 +2974,29 @@
       }
     }
 
-    // Move obstacles
+    // Move obstacles — TIME WARP slows world scroll without touching the player
+    const wSlow = worldSlow();
+    const wSpeed = speed * wSlow;
     obstacles.forEach((o) => {
-      o.x -= speed + (o.vx || 0);
+      o.x -= wSpeed + (o.vx || 0) * wSlow;
       // Flyers gently bob on a sine path — adds life; stays within run-under clearance
       if (o.bobAmp) o.y = o.baseY + Math.sin(frame * o.bobSp + o.bobPh) * o.bobAmp;
     });
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
-    springs.forEach((s) => { s.x -= speed; s.t += 0.15; if (s.used > 0) s.used--; });
+    springs.forEach((s) => { s.x -= wSpeed; s.t += 0.15; if (s.used > 0) s.used--; });
     springs = springs.filter((s) => s.x + s.w > -30);
     // Slam cracks scroll + fade
     if (slamCracks.length) {
-      for (const c of slamCracks) { c.x -= speed; c.life--; }
+      for (const c of slamCracks) { c.x -= wSpeed; c.life--; }
       slamCracks = slamCracks.filter((c) => c.life > 0 && c.x > -120);
     }
     // Coin-chain arcs scroll + fade. We also drift the stored last-pickup point
     // so a follow-up coin computes its delta in the same scrolled frame.
     if (coinChains.length) {
-      for (const c of coinChains) { c.x1 -= speed; c.x2 -= speed; c.life--; }
+      for (const c of coinChains) { c.x1 -= wSpeed; c.x2 -= wSpeed; c.life--; }
       coinChains = coinChains.filter((c) => c.life > 0);
     }
-    if (lastCoinFrame > 0) lastCoinX -= speed;
+    if (lastCoinFrame > 0) lastCoinX -= wSpeed;
 
     // METEOR update — meteors drift left with scroll AND fall toward their tx,
     // because the shadow stays world-anchored. On impact: flash, ring, dust,
@@ -2897,8 +3005,8 @@
     if (meteors.length) {
       for (const m of meteors) {
         m.t++;
-        m.tx -= speed;        // shadow scrolls with the world
-        m.y += m.vy;
+        m.tx -= wSpeed;       // shadow scrolls with the world (slowed by time-warp)
+        m.y += m.vy * wSlow;  // fall slowed by time-warp too
         m.ttl--;
         if (m.ttl <= 0 && m.impact === 0) {
           m.impact = 14;
@@ -2929,7 +3037,7 @@
     const pcy = standCy + ((GROUND - 14) - standCy) * sTc;
     const pcr = 20 - 9 * sTc; // 20 standing, 11 fully slid
     coinsArr.forEach((c) => {
-      c.x -= speed;
+      c.x -= wSpeed;
       c.t += 0.15;
       if (magnetFrames > 0) {
         const dx = pcx - c.x;
@@ -2945,12 +3053,12 @@
     coinsArr = coinsArr.filter((c) => c.x > -30 && !c.picked);
 
     // Move powerups
-    powerups.forEach((p) => { p.x -= speed; p.t += 0.08; });
+    powerups.forEach((p) => { p.x -= wSpeed; p.t += 0.08; });
     powerups = powerups.filter((p) => p.x > -40 && !p.picked);
 
     // Move mystery boxes (fall + scroll), land on ground OR on top of obstacles
     mysteryBoxes.forEach((m) => {
-      m.x -= speed;
+      m.x -= wSpeed;
       m.y += m.vy;
       m.t += 0.1;
       m.glow = (Math.sin(m.t * 2) + 1) * 0.5;
@@ -2971,6 +3079,14 @@
     // Decay magnet
     if (magnetFrames > 0) magnetFrames--;
     if (sprintFrames > 0) sprintFrames--;
+    if (timewarpFrames > 0) {
+      timewarpFrames--;
+      // Brief outro pulse when time-warp ends
+      if (timewarpFrames === 0) {
+        addRing(player.x + player.w / 2, player.y + player.h / 2, 120, '25,240,255', 24);
+        popText('TIME ON', player.x + player.w / 2, player.y - 30, '#19f0ff', 1.0);
+      }
+    }
     if (phaseFrames > 0) {
       phaseFrames--;
       if (phaseFrames === 0) {
@@ -3240,6 +3356,25 @@
           music.duck();
           missionEvent('sprint');
           if (!hasAch('sprint_first')) unlock('sprint_first');
+        } else if (p.type === 'timewarp') {
+          // TIME WARP — slows obstacles + meteors, leaves player input fully reactive.
+          // PRISM skin extends the duration; upgrade-agnostic for now (room to grow).
+          const dur = 60 * (4 + perkVal('timewarp'));
+          timewarpFrames = Math.max(timewarpFrames, dur);
+          popText('⏱ TIME WARP', p.x, p.y - 24, '#19f0ff', 1.5);
+          addRing(p.x, p.y, 110, '120,230,255', 34);
+          addRing(p.x, p.y, 70, '255,255,255', 26);
+          flashFrame = frame;
+          glitchFrame = frame;
+          zoomPunch = Math.max(zoomPunch, 0.07);
+          shake = Math.max(shake, 6);
+          slowmoFrames = Math.max(slowmoFrames, 10);
+          music.duck();
+          missionEvent('timewarp');
+          lifeTimewarps++; writeLS('glitchrun.v1.lifeTimewarps', lifeTimewarps);
+          if (!hasAch('timewarp_first')) unlock('timewarp_first');
+          if (lifeTimewarps >= 20 && !hasAch('timewarp_master')) unlock('timewarp_master');
+          showTipOnce('timewarp', '⏱ TIME WARP', 'Lumea încetinește — tu nu. Folosește momentul!');
         } else if (p.type === 'phase') {
           const dur = 60 * (5 + perkVal('phase')); // PHANTOM skin: +2s
           phaseFrames = Math.max(phaseFrames, dur);
@@ -3262,7 +3397,7 @@
         }
         audio.power && audio.power();
         missionEvent('powerup');
-        const pcol = p.type === 'magnet' ? '#ffe14a' : p.type === 'shield' ? '#19f0ff' : p.type === 'phase' ? '#c8a8ff' : '#fff';
+        const pcol = p.type === 'magnet' ? '#ffe14a' : p.type === 'shield' ? '#19f0ff' : p.type === 'phase' ? '#c8a8ff' : p.type === 'timewarp' ? '#19f0ff' : '#fff';
         for (let i = 0; i < 16; i++) {
           const a = Math.random() * Math.PI * 2;
           const v = Math.random() * 4 + 2;
@@ -3361,16 +3496,29 @@
     envCache = { pal: palette, h: H, haze, refl };
   }
   function drawBackground() {
-    if (skyGradientH !== H || skyGradientPal !== palette) {
-      skyGradient = ctx.createLinearGradient(0, 0, 0, H);
-      skyGradient.addColorStop(0, palette.sky[0]);
-      skyGradient.addColorStop(0.6, palette.sky[1]);
-      skyGradient.addColorStop(1, palette.sky[2]);
-      skyGradientH = H;
-      skyGradientPal = palette;
+    if (palette.prism) {
+      // PRISM biome — sky is a constantly drifting spectrum. Three hue-shifted
+      // bands stacked vertically read as a living aurora-tinted sky. Built each
+      // frame (cheap) instead of caching, so the colour actually moves.
+      const baseHue = (frame * 0.6) % 360;
+      const sg = ctx.createLinearGradient(0, 0, 0, H);
+      sg.addColorStop(0, 'hsl(' + (baseHue) % 360 + ',60%,8%)');
+      sg.addColorStop(0.45, 'hsl(' + (baseHue + 60) % 360 + ',75%,18%)');
+      sg.addColorStop(1, 'hsl(' + (baseHue + 130) % 360 + ',85%,28%)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      if (skyGradientH !== H || skyGradientPal !== palette) {
+        skyGradient = ctx.createLinearGradient(0, 0, 0, H);
+        skyGradient.addColorStop(0, palette.sky[0]);
+        skyGradient.addColorStop(0.6, palette.sky[1]);
+        skyGradient.addColorStop(1, palette.sky[2]);
+        skyGradientH = H;
+        skyGradientPal = palette;
+      }
+      ctx.fillStyle = skyGradient;
+      ctx.fillRect(0, 0, W, H);
     }
-    ctx.fillStyle = skyGradient;
-    ctx.fillRect(0, 0, W, H);
 
     // Nebula clouds — far atmospheric depth, additive soft blobs
     ctx.save();
@@ -3419,6 +3567,38 @@
       ctx.beginPath(); ctx.arc(mcx - 9, mcy - 6, 3, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(mcx + 4, mcy + 8, 2.4, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(mcx - 4, mcy + 14, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // PRISM biome — rainbow ribbons sweeping the sky on alternating phases.
+    // Each ribbon is a hue-shifted sine band. Sells the spectrum theme without
+    // breaking play readability (drawn behind the sun).
+    if (palette.prism) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const ribbons = [
+        { cy: GROUND - 380, amp: 50, ph: frame * 0.014,       hueOff: 0,    alpha: 0.35 },
+        { cy: GROUND - 320, amp: 40, ph: frame * 0.022 + 1.4, hueOff: 80,   alpha: 0.32 },
+        { cy: GROUND - 260, amp: 32, ph: frame * 0.018 + 2.7, hueOff: 180,  alpha: 0.28 },
+        { cy: GROUND - 200, amp: 24, ph: frame * 0.025 + 4.1, hueOff: 260,  alpha: 0.22 }
+      ];
+      for (const r of ribbons) {
+        const hue = (frame * 0.9 + r.hueOff) % 360;
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 10) {
+          const y = r.cy + Math.sin(x * 0.014 + r.ph) * r.amp + Math.sin(x * 0.045 + r.ph * 1.7) * 7;
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.lineTo(W, r.cy + 90);
+        ctx.lineTo(0, r.cy + 90);
+        ctx.closePath();
+        const g = ctx.createLinearGradient(0, r.cy - 30, 0, r.cy + 90);
+        g.addColorStop(0, 'hsla(' + hue + ',95%,70%,0)');
+        g.addColorStop(0.4, 'hsla(' + hue + ',95%,68%,' + r.alpha + ')');
+        g.addColorStop(1, 'hsla(' + hue + ',95%,70%,0)');
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     // AURORA biome — sweeping ribbons of green/cyan light waving across the sky.
@@ -3761,14 +3941,25 @@
       ctx.restore();
     }
 
-    // Trail — soft glow without shadowBlur (skin-tinted)
+    // Trail — soft glow without shadowBlur (skin-tinted). During OVERDRIVE the
+    // tint hue-cycles per segment so the streak literally screams the multiplier.
     for (let i = 0; i < player.trail.length; i++) {
       const t = player.trail[i];
       const a = Math.max(0, t.life / 20);
       const r = 18 * a;
+      let trailRGB = sk.trail;
+      if (feverActive) {
+        const hue = (frame * 8 + i * 18) % 360;
+        // Cheap hsl-ish: convert hue to rough rgb tuple via fixed conversion
+        const h6 = (hue / 60) % 6;
+        const X = 255 * (1 - Math.abs((h6 % 2) - 1));
+        const map = [[255, X, 0], [X, 255, 0], [0, 255, X], [0, X, 255], [X, 0, 255], [255, 0, X]];
+        const m = map[Math.floor(h6)];
+        trailRGB = (m[0] | 0) + ',' + (m[1] | 0) + ',' + (m[2] | 0);
+      }
       const grad = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, r);
-      grad.addColorStop(0, 'rgba(' + sk.trail + ', ' + (a * 0.5) + ')');
-      grad.addColorStop(1, 'rgba(' + sk.trail + ', 0)');
+      grad.addColorStop(0, 'rgba(' + trailRGB + ', ' + (a * 0.5) + ')');
+      grad.addColorStop(1, 'rgba(' + trailRGB + ', 0)');
       ctx.fillStyle = grad;
       ctx.fillRect(t.x - r, t.y - r, r * 2, r * 2);
     }
@@ -3870,8 +4061,40 @@
     // flat orb gets a soft subtle glow instead of a harsh bright streak.
     const glowAlpha = 1 - sT * 0.5;
 
+    // PRISM skin — rainbow halo cycling around the orb, drawn first so the core
+    // sits cleanly on top. Skipped if the chromatic glitch frame is also active.
+    if (sk.id === 'prism') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 6; k++) {
+        const hue = (frame * 4 + k * 60) % 360;
+        const a = 0.42 - k * 0.06;
+        ctx.strokeStyle = 'hsla(' + hue + ',95%,65%,' + a + ')';
+        ctx.lineWidth = 2.2 - k * 0.25;
+        ctx.beginPath();
+        ctx.arc(cx, cy, baseR * (1.25 + k * 0.18) * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // TEMPO skin — cyan clock arcs always orbiting (idle flourish even off-warp)
+    if (sk.id === 'tempo') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 2; k++) {
+        const rr = baseR * (1.5 + k * 0.4);
+        const ang = frame * (0.05 + k * 0.03) * (k % 2 === 0 ? 1 : -1);
+        ctx.strokeStyle = 'rgba(180,240,255,' + (0.5 - k * 0.18) + ')';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, ang, ang + Math.PI * 0.7);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // GLITCH skin effect: chromatic offset (cyan + pink "ghost" rings flicker around the orb)
-    if (sk.animated && Math.floor(frame / 6) % 4 !== 0) {
+    if (sk.animated && sk.id !== 'prism' && sk.id !== 'tempo' && Math.floor(frame / 6) % 4 !== 0) {
       const jitter = (Math.random() - 0.5) * 4;
       ctx.fillStyle = 'rgba(25, 240, 255, 0.35)';
       ctx.beginPath();
@@ -3881,6 +4104,27 @@
       ctx.beginPath();
       ctx.ellipse(cx + 3 - jitter, cy, baseR * 0.95 * sqX, baseR * 0.95 * sqY, 0, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // High-combo rim glow — at combo ≥ 15 the orb gains a hot outer rim,
+    // brightening with the combo tier. Reads instantly as "tier upgrade".
+    if (combo >= 15) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const rgb = combo >= 30 ? '255,61,240' : combo >= 20 ? '255,140,60' : '255,225,74';
+      const a = Math.min(0.55, 0.30 + (combo - 15) * 0.012);
+      const rimR = baseR * 1.35 * pulse;
+      ctx.strokeStyle = 'rgba(' + rgb + ',' + a + ')';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rimR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(' + rgb + ',' + (a * 0.6) + ')';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rimR + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     // Outer glow halo (skin-tinted) — squashes with the orb, fades when flat
@@ -3989,6 +4233,38 @@
       }
     }
 
+    // TIME WARP — concentric clock-face arcs orbiting the orb, plus subtle
+    // cyan glow halo. Reads as "time bent around you" without competing with
+    // other auras (we draw it BEFORE magnet/shield so they still layer cleanly).
+    if (timewarpFrames > 0) {
+      const fade = Math.min(1, timewarpFrames / 24);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // Soft cyan halo
+      const tg = ctx.createRadialGradient(cx, cy, baseR * 0.8, cx, cy, baseR * 2.6);
+      tg.addColorStop(0, 'rgba(120,230,255,0)');
+      tg.addColorStop(0.6, 'rgba(120,230,255,' + (0.18 * fade) + ')');
+      tg.addColorStop(1, 'rgba(120,230,255,0)');
+      ctx.fillStyle = tg;
+      ctx.fillRect(cx - baseR * 2.6, cy - baseR * 2.6, baseR * 5.2, baseR * 5.2);
+      // Three rotating arc segments — fast outer, slow inner (opposite directions)
+      ctx.lineCap = 'round';
+      for (let k = 0; k < 3; k++) {
+        const rr = baseR * (1.8 + k * 0.4);
+        const dir = k % 2 === 0 ? 1 : -1;
+        const ang = frame * (0.06 + k * 0.03) * dir;
+        ctx.strokeStyle = 'rgba(180,240,255,' + (0.65 * fade - k * 0.15) + ')';
+        ctx.lineWidth = 2.4 - k * 0.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, ang, ang + Math.PI * 0.8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, ang + Math.PI, ang + Math.PI * 1.4);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Magnet field
     if (magnetFrames > 0) {
       const mr = 60 + (Math.sin(frame * 0.15) * 8);
@@ -4074,6 +4350,7 @@
       const col = p.type === 'magnet' ? '255, 225, 74'
                 : p.type === 'shield' ? '25, 240, 255'
                 : p.type === 'phase'  ? '200, 168, 255'
+                : p.type === 'timewarp' ? '120, 230, 255'
                 : '255, 255, 255';
       g.addColorStop(0, 'rgba(' + col + ', 0.6)');
       g.addColorStop(1, 'rgba(' + col + ', 0)');
@@ -4087,7 +4364,13 @@
       ctx.font = 'bold 22px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(p.type === 'magnet' ? '🧲' : p.type === 'shield' ? '🛡' : p.type === 'phase' ? '👻' : '⚡', px, py + 2);
+      ctx.fillText(
+        p.type === 'magnet'   ? '🧲' :
+        p.type === 'shield'   ? '🛡' :
+        p.type === 'phase'    ? '👻' :
+        p.type === 'timewarp' ? '⏱' :
+        '⚡',
+        px, py + 2);
     }
   }
 
@@ -4102,30 +4385,56 @@
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
+    // Hot streak: at combo ≥ 10 (or OVERDRIVE) the chain becomes multi-segment
+    // jagged lightning instead of a single bend. Reads as actual electric arcs.
+    const hot = feverActive || combo >= 10;
+    const veryHot = feverActive || combo >= 20;
     for (const c of coinChains) {
       const k = c.life / 14;
       const dx = c.x2 - c.x1, dy = c.y2 - c.y1;
       const len = Math.sqrt(dx * dx + dy * dy);
       if (len < 1) continue;
-      const ux = -dy / len, uy = dx / len; // perpendicular for jitter
-      const j1 = 6 * (Math.random() - 0.5);
-      const j2 = 6 * (Math.random() - 0.5);
-      const mx = c.x1 + dx * 0.5 + ux * j1;
-      const my = c.y1 + dy * 0.5 + uy * j1 + j2;
-      ctx.strokeStyle = 'rgba(255,225,120,' + (0.7 * k).toFixed(3) + ')';
-      ctx.lineWidth = 2;
+      const ux = -dy / len, uy = dx / len;
+      // Build a poly-line: more segments + sharper jitter when hot
+      const segs = veryHot ? 5 : hot ? 4 : 2;
+      const jit = veryHot ? 14 : hot ? 10 : 6;
+      const pts = [{ x: c.x1, y: c.y1 }];
+      for (let i = 1; i < segs; i++) {
+        const t = i / segs;
+        const j = (Math.random() - 0.5) * jit;
+        pts.push({
+          x: c.x1 + dx * t + ux * j,
+          y: c.y1 + dy * t + uy * j
+        });
+      }
+      pts.push({ x: c.x2, y: c.y2 });
+      // Outer glow stroke — hue depends on heat tier
+      const outerRGB = veryHot ? '255,61,240' : hot ? '255,140,60' : '255,225,120';
+      ctx.strokeStyle = 'rgba(' + outerRGB + ',' + (0.7 * k).toFixed(3) + ')';
+      ctx.lineWidth = veryHot ? 3 : 2;
       ctx.beginPath();
-      ctx.moveTo(c.x1, c.y1);
-      ctx.lineTo(mx, my);
-      ctx.lineTo(c.x2, c.y2);
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 * k).toFixed(3) + ')';
-      ctx.lineWidth = 0.9;
+      // Bright white core for that electric look
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.85 * k).toFixed(3) + ')';
+      ctx.lineWidth = 1.0;
       ctx.beginPath();
-      ctx.moveTo(c.x1, c.y1);
-      ctx.lineTo(mx, my);
-      ctx.lineTo(c.x2, c.y2);
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
       ctx.stroke();
+      // Hot tier: spawn tiny sparks along the path (cheap, decays with k)
+      if (veryHot && Math.random() < 0.5) {
+        for (let s = 0; s < 2; s++) {
+          const t = Math.random();
+          const sx = c.x1 + dx * t;
+          const sy = c.y1 + dy * t;
+          ctx.fillStyle = 'rgba(255,255,255,' + (0.8 * k) + ')';
+          ctx.beginPath();
+          ctx.arc(sx + (Math.random() - 0.5) * 6, sy + (Math.random() - 0.5) * 6, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.restore();
   }
@@ -4486,6 +4795,55 @@
       ctx.fillRect(0, 0, W, GROUND);
       return;
     }
+    // HYPERSPACE — a star-warp tunnel radiating from the right-side vanishing point.
+    // Streaks emanate outward, scaling with the section's intro/outro fade.
+    if (setpiece.type === 'hyperspace') {
+      const t = setpiece.t;
+      const dur = setpiece.dur;
+      const intro = Math.min(1, t / 40);
+      const outro = Math.min(1, (dur - t) / 40);
+      const fade = Math.min(intro, outro);
+      const vx = W * 0.78, vy = GROUND - 220;
+      // Radial darken behind the streaks to make them pop
+      const dim = ctx.createRadialGradient(vx, vy, 0, vx, vy, W * 1.1);
+      dim.addColorStop(0, 'rgba(40,0,80,' + (0.10 * fade) + ')');
+      dim.addColorStop(1, 'rgba(8,4,24,' + (0.45 * fade) + ')');
+      ctx.fillStyle = dim;
+      ctx.fillRect(0, 0, W, H);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // Streak field — 80 deterministic streaks animated by frame
+      const N = 80;
+      for (let i = 0; i < N; i++) {
+        const ang = (i * 137.5) % 360 * Math.PI / 180;
+        const phase = (frame * (0.025 + (i % 7) * 0.004) + i * 0.31) % 1;
+        const dist = phase * Math.hypot(W, H) * 0.9;
+        const x = vx + Math.cos(ang) * dist;
+        const y = vy + Math.sin(ang) * dist;
+        const trailLen = 70 + (i % 5) * 40;
+        const tx = vx + Math.cos(ang) * Math.max(0, dist - trailLen);
+        const ty = vy + Math.sin(ang) * Math.max(0, dist - trailLen);
+        const a = (0.55 - phase * 0.45) * fade;
+        if (a <= 0.02) continue;
+        const hue = (i * 23 + frame) % 360;
+        ctx.strokeStyle = 'hsla(' + hue + ',95%,70%,' + a.toFixed(3) + ')';
+        ctx.lineWidth = 1 + (1 - phase) * 1.6;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      }
+      // Central pulse at the vanishing point
+      const pulseR = 60 + Math.sin(frame * 0.18) * 14;
+      const cg = ctx.createRadialGradient(vx, vy, 4, vx, vy, pulseR);
+      cg.addColorStop(0, 'rgba(255,255,255,' + (0.65 * fade) + ')');
+      cg.addColorStop(0.5, 'rgba(180,120,255,' + (0.40 * fade) + ')');
+      cg.addColorStop(1, 'rgba(120,80,220,0)');
+      ctx.fillStyle = cg;
+      ctx.fillRect(vx - pulseR, vy - pulseR, pulseR * 2, pulseR * 2);
+      ctx.restore();
+      return;
+    }
     if (setpiece.type !== 'tornado') return;
     const v = setpiece.vortex;
     if (v < 0.01) return;
@@ -4809,6 +5167,7 @@
       else if (setpiece.type === 'meteor') { washRGB = '255, 140, 60'; barRGB = '255,140,60'; }
       else if (setpiece.type === 'storm') { washRGB = '120, 230, 255'; barRGB = '120,230,255'; }
       else if (setpiece.type === 'tornado') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
+      else if (setpiece.type === 'hyperspace') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
       ctx.fillStyle = 'rgba(' + washRGB + ',0.08)';
       ctx.fillRect(0, 0, W, H);
       const prog = 1 - setpiece.t / setpiece.dur;
@@ -4825,6 +5184,30 @@
     // cues below (flash / glitch) stay crisp because they're drawn after it.
     applyBloom();
 
+    // TIME WARP wash — a cool cyan vignette + slow radial pulse out from centre.
+    // Reads "time is slowing" without obscuring play; fades out in the last
+    // half-second so the world snaps back cleanly.
+    if (state === STATE.PLAY && timewarpFrames > 0) {
+      const fade = Math.min(1, timewarpFrames / 36);
+      const tw = ctx.createRadialGradient(W / 2, GROUND - 200, W * 0.18, W / 2, GROUND - 200, W * 0.85);
+      tw.addColorStop(0, 'rgba(180,240,255,0)');
+      tw.addColorStop(0.65, 'rgba(120,210,255,' + (0.10 * fade) + ')');
+      tw.addColorStop(1, 'rgba(80,170,255,' + (0.22 * fade) + ')');
+      ctx.fillStyle = tw;
+      ctx.fillRect(0, 0, W, H);
+      // Scanning ring — a faint cyan ring slowly sweeping outward, like a sonar tick
+      const sweepT = (frame * 0.03) % 1;
+      const sweepR = sweepT * Math.hypot(W, H) * 0.6;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(160,230,255,' + (0.18 * fade * (1 - sweepT)) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(player.x + player.w / 2, GROUND - 60, sweepR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Combo "heat" / OVERDRIVE wash — the screen glows with the streak. During
     // OVERDRIVE it cycles through the full neon spectrum for a frenzied look.
     const heat = Math.min(combo, 20) / 20;
@@ -4840,6 +5223,25 @@
         hg.addColorStop(1, 'rgba(' + palette.sunRGB + ',' + (0.12 * heat * pulse).toFixed(3) + ')');
       }
       ctx.fillStyle = hg;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Subtle CRT scanlines + corner vignette — synthwave authenticity layer.
+    // Drawn AFTER bloom + heat wash so it sits on top without being blown out.
+    // Kept very low alpha so it never fights gameplay readability.
+    if (state === STATE.PLAY || state === STATE.PAUSED) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      // 2px stripes spaced every 4px (cheap: stride loop, not a pattern)
+      ctx.fillStyle = 'rgba(40, 50, 90, 0.18)';
+      for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+      ctx.restore();
+      // Soft vignette — radial darken at the edges
+      const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.30, W / 2, H / 2, Math.max(W, H) * 0.78);
+      vg.addColorStop(0, 'rgba(0,0,0,0)');
+      vg.addColorStop(0.65, 'rgba(0,0,0,0.18)');
+      vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+      ctx.fillStyle = vg;
       ctx.fillRect(0, 0, W, H);
     }
 

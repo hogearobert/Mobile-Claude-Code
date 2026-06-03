@@ -289,6 +289,16 @@ html, body {
   0%, 100% { box-shadow: 0 0 12px rgba(180, 130, 255, 0.45); opacity: 0.85; }
   50% { box-shadow: 0 0 24px rgba(200, 150, 255, 0.85); opacity: 1; }
 }
+.pw.timewarp {
+  border-color: rgba(120, 230, 255, 0.7);
+  box-shadow: 0 0 12px rgba(120, 230, 255, 0.45);
+  animation: warpPulse 0.55s ease-in-out infinite;
+}
+.pw.timewarp .pf { background: linear-gradient(90deg, #fff, #19f0ff); }
+@keyframes warpPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(120, 230, 255, 0.45); opacity: 0.9; }
+  50% { box-shadow: 0 0 24px rgba(120, 230, 255, 0.85); opacity: 1; }
+}
 
 /* OVERDRIVE / Fever meter */
 .fever-bar {
@@ -1219,6 +1229,7 @@ html, body {
   .fever-bar.active .fever-fill,
   .pw.sprint,
   .pw.phase,
+  .pw.timewarp,
   .badge.record.close,
   .badge.record.imminent {
     animation: none !important;
