@@ -827,12 +827,23 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
-  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado', 'hyperspace'];
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado', 'hyperspace', 'nemesis'];
+  // NEMESIS chase — a shadow version of the player creeps in from behind,
+  // gaining ground each frame. The player must keep clearing obstacles fast
+  // (each clear pushes it back). Hits the player on x-overlap → death.
+  let nemesis = null;
   function startSetpiece() {
     const type = SETPIECE_TYPES[setpieceCount % SETPIECE_TYPES.length];
     setpieceCount++;
     nextSetpieceAt += 1300;
-    const dur = type === 'coinrush' ? 440 : type === 'tornado' ? 620 : type === 'lowg' ? 520 : type === 'meteor' ? 540 : type === 'storm' ? 480 : type === 'hyperspace' ? 460 : 560;
+    const dur = type === 'coinrush' ? 440
+              : type === 'tornado' ? 620
+              : type === 'lowg' ? 520
+              : type === 'meteor' ? 540
+              : type === 'storm' ? 480
+              : type === 'hyperspace' ? 460
+              : type === 'nemesis' ? 520
+              : 560;
     setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
     powerups = powerups.filter((p) => p.x < W * 0.55);
@@ -847,12 +858,23 @@
       obstacles = obstacles.filter((o) => o.x < W * 0.30);
       meteors = [];
     }
+    if (type === 'nemesis') {
+      showTipOnce('nemesis', '👁 NEMESIS', 'Fugi! Umbra te urmărește — fiecare obstacol trecut o respinge!');
+      // Spawn the shadow off-screen left; it creeps right toward the player.
+      nemesis = {
+        x: -60,
+        y: GROUND - 50,
+        size: 36,
+        eyePhase: 0
+      };
+    }
     const label = type === 'coinrush' ? '★ COIN RUSH ★'
                 : type === 'tornado' ? '🌪 TORNADO 🌪'
                 : type === 'lowg' ? '🌙 LOW-G 🌙'
                 : type === 'meteor' ? '☄ METEOR SHOWER ☄'
                 : type === 'storm' ? '⛈ STORM ⛈'
                 : type === 'hyperspace' ? '🌌 HYPERSPACE 🌌'
+                : type === 'nemesis' ? '👁 NEMESIS 👁'
                 : '⚡ GAUNTLET ⚡';
     const col = type === 'coinrush' ? '#ffe14a'
               : type === 'tornado' ? '#b478ff'
@@ -860,6 +882,7 @@
               : type === 'meteor' ? '#ff7a3d'
               : type === 'storm' ? '#19f0ff'
               : type === 'hyperspace' ? '#b478ff'
+              : type === 'nemesis' ? '#ff0a3d'
               : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
@@ -949,6 +972,57 @@
       }
       // Random lightning crack adds chaos atmosphere — purely visual
       if (rnd() < 0.012) { lightningFrame = frame; makeBolt && makeBolt(); if (audio.thunder) audio.thunder(); }
+    } else if (setpiece.type === 'nemesis') {
+      // NEMESIS — shadow creeps right toward the player. Sustains spawn cadence
+      // of normal obstacles so the player has to PLAY through it, not stop and
+      // wait. Each obstacle that scrolls past the player without being hit
+      // pushes the shadow back (handled in near-miss block by setpiece check).
+      if (nemesis) {
+        // Catch-up speed scales over time so it always eventually catches a
+        // stalling player. Sin-wobble adds personality.
+        const elapsed = setpiece.t;
+        const catchup = 0.35 + elapsed / setpiece.dur * 0.9;
+        nemesis.x += catchup;
+        nemesis.eyePhase += 0.16;
+        // Smoke trail particles from the shadow
+        if ((frame & 1) === 0) {
+          pushParticle(
+            nemesis.x - 6 + (Math.random() - 0.5) * 8,
+            nemesis.y + (Math.random() - 0.5) * 12,
+            -1 - Math.random() * 1.5, -0.5 - Math.random() * 0.8,
+            32, 'rgba(40,0,30,0.85)', 2 + Math.random() * 2
+          );
+        }
+        // Lethal contact: if shadow x reaches player → instant gameOver, but
+        // shield can absorb it once.
+        if (nemesis.x + nemesis.size > player.x + 6 && frame > invincibleUntil) {
+          if (shieldActive) {
+            shieldActive = false;
+            shieldFlashFrame = frame;
+            invincibleUntil = frame + 60;
+            slowmoFrames = 30;
+            glitchFrame = frame; flashFrame = frame;
+            zoomPunch = Math.max(zoomPunch, 0.07);
+            addRing(player.x + player.w / 2, player.y + player.h / 2, 110, '25,240,255', 30);
+            // knock the nemesis back hard
+            nemesis.x = -120;
+            shake = Math.max(shake, 14);
+            audio.hit();
+            popText('SCUT!', player.x, player.y - 40, '#19f0ff', 1.4);
+          } else {
+            gameOver();
+            return;
+          }
+        }
+      }
+      // Normal-ish obstacle spawning to keep the player moving
+      if (setpiece.spawnTimer <= 0) {
+        const r = rnd();
+        if (r < 0.45) makeObstacle('spike', W + 20);
+        else if (r < 0.75) makeObstacle('overhang', W + 20);
+        else makeObstacle('flying', W + 20);
+        setpiece.spawnTimer = 70 + Math.floor(rnd() * 26);
+      }
     } else if (setpiece.type === 'hyperspace') {
       // HYPERSPACE — pure dopamine zone: dense coin streams at multiple altitudes,
       // no obstacles, auto-magnet topped up. Visual tunnel is in draw().
@@ -1041,6 +1115,25 @@
         addRing(W / 2, GROUND - 120, 220, '120,230,255', 36);
         addFever(0.2);
         shake = Math.max(shake, 11);
+        audio.power();
+      } else if (setpiece.type === 'nemesis') {
+        runCoins += 140;
+        popText('+140 ★  NEMESIS BANISHED!', W / 2, GROUND - 200, '#ff0a3d', 1.6);
+        addRing(W / 2, GROUND - 120, 240, '255,40,80', 38);
+        addRing(W / 2, GROUND - 120, 180, '255,255,255', 32);
+        addFever(0.22);
+        shake = Math.max(shake, 11);
+        // Nemesis dramatic disappear: implode it with a particle burst
+        if (nemesis) {
+          for (let i = 0; i < 30; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const v = Math.random() * 7 + 2;
+            pushParticle(nemesis.x + 18, nemesis.y, Math.cos(a) * v, Math.sin(a) * v, 60,
+              ['#ff0a3d', '#1a0000', '#fff'][i % 3], Math.random() * 3 + 1.5);
+          }
+        }
+        nemesis = null;
+        if (!hasAch('nemesis_survive')) unlock('nemesis_survive');
         audio.power();
       } else if (setpiece.type === 'hyperspace') {
         runCoins += 90;
@@ -1153,7 +1246,8 @@
     { id: 'hyperspace',    name: 'Hyperspeed',           desc: 'Supraviețuiește un HYPERSPACE', reward: 110 },
     { id: 'prism_biome',   name: 'Spectrum',             desc: 'Ajunge la biomul PRISM',        reward: 350 },
     { id: 'trick_combo',   name: 'Acrobat',              desc: 'Trece peste 2 obstacole într-un singur salt', reward: 40 },
-    { id: 'trick_pro',     name: 'Maestru Acrobat',      desc: 'Trece peste 4 obstacole într-un singur salt', reward: 120 }
+    { id: 'trick_pro',     name: 'Maestru Acrobat',      desc: 'Trece peste 4 obstacole într-un singur salt', reward: 120 },
+    { id: 'nemesis_survive', name: 'Învingător de Umbre', desc: 'Supraviețuiește un NEMESIS', reward: 150 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
   // In-memory unlock cache — avoids a synchronous localStorage read per trophy
@@ -1852,6 +1946,7 @@
     nextMysteryAt = 1800;
     mysteryBoxes = [];
     setpiece = null;
+    nemesis = null;
     setpieceCount = 0;
     nextSetpieceAt = 1800;
     shake = 0;
@@ -3293,6 +3388,11 @@
       if (o.nearChecked) continue;
       if (o.x + o.w < pcx) {
         o.nearChecked = true;
+        // NEMESIS bounce-back — every cleared obstacle pushes the shadow back
+        if (nemesis && setpiece && setpiece.type === 'nemesis') {
+          nemesis.x -= 28;
+          addRing(nemesis.x + 18, nemesis.y, 50, '255,40,80', 14);
+        }
         if (frame <= invincibleUntil) continue;
         // AIR TRICK chain — clearing multiple obstacles in one airborne arc
         // builds a trick streak. Each successive air-clear escalates the
@@ -5116,6 +5216,78 @@
       ctx.fillRect(0, 0, W, GROUND);
       return;
     }
+    // NEMESIS — a smoky dark orb with a glowing red eye, chasing from behind.
+    // Visually unique from any other entity in the game.
+    if (setpiece.type === 'nemesis' && nemesis) {
+      const nx = nemesis.x, ny = nemesis.y, ns = nemesis.size;
+      ctx.save();
+      // Smoke halo
+      const sh = ctx.createRadialGradient(nx + ns / 2, ny, ns * 0.2, nx + ns / 2, ny, ns * 2.6);
+      sh.addColorStop(0, 'rgba(60,0,30,0.85)');
+      sh.addColorStop(0.4, 'rgba(40,0,20,0.55)');
+      sh.addColorStop(1, 'rgba(20,0,10,0)');
+      ctx.fillStyle = sh;
+      ctx.fillRect(nx - ns * 2, ny - ns * 2.6, ns * 5, ns * 5.2);
+      // Inky body
+      const body = ctx.createRadialGradient(nx + ns * 0.3, ny - ns * 0.2, 0, nx + ns / 2, ny, ns);
+      body.addColorStop(0, '#3a0010');
+      body.addColorStop(0.7, '#0a0004');
+      body.addColorStop(1, '#000');
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.arc(nx + ns / 2, ny, ns, 0, Math.PI * 2);
+      ctx.fill();
+      // Glowing red eye that tracks the player
+      const eyeOffsetX = Math.cos(0) * 8;
+      const eyeR = ns * 0.32;
+      const ang2 = Math.atan2((player.y + player.h / 2) - ny, (player.x + player.w / 2) - (nx + ns / 2));
+      const ex = nx + ns / 2 + Math.cos(ang2) * 5;
+      const ey = ny + Math.sin(ang2) * 4;
+      const ig = ctx.createRadialGradient(ex, ey, 0, ex, ey, eyeR * 1.8);
+      ig.addColorStop(0, 'rgba(255,80,80,1)');
+      ig.addColorStop(0.5, 'rgba(255,20,60,0.7)');
+      ig.addColorStop(1, 'rgba(255,0,30,0)');
+      ctx.fillStyle = ig;
+      ctx.fillRect(ex - eyeR * 1.8, ey - eyeR * 1.8, eyeR * 3.6, eyeR * 3.6);
+      ctx.fillStyle = '#ff3030';
+      ctx.beginPath();
+      ctx.arc(ex, ey, eyeR * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      // Bright pupil
+      ctx.fillStyle = '#fff8d0';
+      ctx.beginPath();
+      ctx.arc(ex - 1.5, ey - 1.5, eyeR * 0.20, 0, Math.PI * 2);
+      ctx.fill();
+      // Flickering claws/tendrils sticking out of the body
+      ctx.strokeStyle = 'rgba(80,0,40,0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 5; i++) {
+        const ph = nemesis.eyePhase + i * 1.2;
+        const tx = nx + ns / 2 + Math.cos(ph) * ns * 1.3;
+        const ty = ny + Math.sin(ph) * ns * 1.0;
+        ctx.beginPath();
+        ctx.moveTo(nx + ns / 2, ny);
+        ctx.quadraticCurveTo(
+          nx + ns / 2 + Math.cos(ph) * ns * 0.5,
+          ny + Math.sin(ph) * ns * 0.5,
+          tx, ty);
+        ctx.stroke();
+      }
+      // Distance indicator: as nemesis closes in, screen edge tint reds up
+      // (drawn here as a left-side glow proportional to proximity).
+      const gap = player.x - (nx + ns);
+      if (gap < 240) {
+        const danger = 1 - Math.max(0, gap / 240);
+        const lg = ctx.createLinearGradient(0, 0, 80, 0);
+        lg.addColorStop(0, 'rgba(255,20,40,' + (0.5 * danger) + ')');
+        lg.addColorStop(1, 'rgba(255,20,40,0)');
+        ctx.fillStyle = lg;
+        ctx.fillRect(0, 0, 80, H);
+      }
+      ctx.restore();
+    }
+
     // HYPERSPACE — a star-warp tunnel radiating from the right-side vanishing point.
     // Streaks emanate outward, scaling with the section's intro/outro fade.
     if (setpiece.type === 'hyperspace') {
@@ -5490,6 +5662,7 @@
       else if (setpiece.type === 'storm') { washRGB = '120, 230, 255'; barRGB = '120,230,255'; }
       else if (setpiece.type === 'tornado') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
       else if (setpiece.type === 'hyperspace') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
+      else if (setpiece.type === 'nemesis') { washRGB = '255, 40, 80'; barRGB = '255,40,80'; }
       ctx.fillStyle = 'rgba(' + washRGB + ',0.08)';
       ctx.fillRect(0, 0, W, H);
       const prog = 1 - setpiece.t / setpiece.dur;
