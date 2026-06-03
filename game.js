@@ -4095,8 +4095,8 @@
       else ctx.lineTo(s.x, s.y);
     }
     let trailRGB = sk.trail;
-    if (feverActive) {
-      const hue = (frame * 6) % 360;
+    if (feverActive || palette.prism) {
+      const hue = (frame * (feverActive ? 6 : 3)) % 360;
       const h6 = (hue / 60) % 6;
       const X = 255 * (1 - Math.abs((h6 % 2) - 1));
       const map = [[255, X, 0], [X, 255, 0], [0, 255, X], [0, X, 255], [X, 0, 255], [255, 0, X]];
@@ -4422,15 +4422,29 @@
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(sqX, sqY);
-    if (sk._coreGrad == null) {
+    let coreFill;
+    if (sk.id === 'prism') {
+      // PRISM skin — orb is a live rainbow gradient that rotates per-frame.
+      // Rebuild every frame (cheap; radial gradient with 4 stops).
+      const baseHue = (frame * 3) % 360;
       const cg = ctx.createRadialGradient(-baseR * 0.3, -baseR * 0.3, 0, 0, 0, baseR);
-      cg.addColorStop(0,   sk.core[0]);
-      cg.addColorStop(0.3, sk.core[1]);
-      cg.addColorStop(0.7, sk.core[2]);
-      cg.addColorStop(1,   sk.core[3]);
-      sk._coreGrad = cg;
+      cg.addColorStop(0,   '#fff');
+      cg.addColorStop(0.3, 'hsl(' + (baseHue) % 360 + ',95%,75%)');
+      cg.addColorStop(0.7, 'hsl(' + (baseHue + 90) % 360 + ',95%,55%)');
+      cg.addColorStop(1,   'hsl(' + (baseHue + 180) % 360 + ',95%,35%)');
+      coreFill = cg;
+    } else {
+      if (sk._coreGrad == null) {
+        const cg = ctx.createRadialGradient(-baseR * 0.3, -baseR * 0.3, 0, 0, 0, baseR);
+        cg.addColorStop(0,   sk.core[0]);
+        cg.addColorStop(0.3, sk.core[1]);
+        cg.addColorStop(0.7, sk.core[2]);
+        cg.addColorStop(1,   sk.core[3]);
+        sk._coreGrad = cg;
+      }
+      coreFill = sk._coreGrad;
     }
-    ctx.fillStyle = sk._coreGrad;
+    ctx.fillStyle = coreFill;
     ctx.beginPath();
     ctx.arc(0, 0, baseR * pulse, 0, Math.PI * 2);
     ctx.fill();
