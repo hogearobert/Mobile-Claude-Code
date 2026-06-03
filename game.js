@@ -1134,6 +1134,7 @@
         }
         nemesis = null;
         if (!hasAch('nemesis_survive')) unlock('nemesis_survive');
+        missionEvent('nemesis_survived');
         audio.power();
       } else if (setpiece.type === 'hyperspace') {
         runCoins += 90;
@@ -1339,7 +1340,8 @@
     { id: 'near_miss_x', type: 'event', mk: () => ({ goal: 5 + Math.floor(Math.random()*5) }),             label: (m) => 'Fă ' + m.goal + ' near-miss', reward: 50 },
     { id: 'phase_x',    type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează PHASE de ' + m.goal + ' ori', reward: 55 },
     { id: 'slam_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*4) }),              label: (m) => 'Distruge ' + m.goal + ' obstacole cu Dive-Slam', reward: 50 },
-    { id: 'timewarp_x', type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează TIME WARP de ' + m.goal + ' ori', reward: 55 }
+    { id: 'timewarp_x', type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează TIME WARP de ' + m.goal + ' ori', reward: 55 },
+    { id: 'nemesis_x',  type: 'event', mk: () => ({ goal: 1 }),                                            label: () => 'Supraviețuiește un NEMESIS', reward: 70 }
   ];
   const MK = { current: SK.skinUnlocked + '.current' };
 
@@ -1394,6 +1396,7 @@
       else if (m.id === 'phase_x' && type === 'phase') inc = 1;
       else if (m.id === 'slam_x' && type === 'slam') inc = value || 1;
       else if (m.id === 'timewarp_x' && type === 'timewarp') inc = 1;
+      else if (m.id === 'nemesis_x' && type === 'nemesis_survived') inc = 1;
       else if (m.id === 'score_x' && type === 'gameover' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'combo_x' && type === 'combo' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'level_x' && type === 'level' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
