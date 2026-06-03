@@ -111,6 +111,17 @@
         setTimeout(() => blip(660, 0.1, 'square', 0.2), 80);
         setTimeout(() => blip(880, 0.2, 'sine', 0.25), 160);
       },
+      warp() {
+        // Time-warp signature: a descending swoosh + reversed sub. Reads "time
+        // bending" — distinct from levelup/power so the moment has its own voice.
+        blip(880, 0.45, 'sine', 0.20, 110);   // long downward slide
+        setTimeout(() => blip(220, 0.25, 'triangle', 0.18, 660), 80);
+        noise(0.45, 0.12, 800);
+      },
+      warpEnd() {
+        // Snap back when warp expires — a sharp upward chirp
+        blip(330, 0.12, 'sine', 0.18, 880);
+      },
       toggle() {
         muted = !muted;
         try { localStorage.setItem('glitchrun.v1.mute', muted ? '1' : '0'); } catch (_) {}
@@ -3156,6 +3167,7 @@
       if (timewarpFrames === 0) {
         addRing(player.x + player.w / 2, player.y + player.h / 2, 120, '25,240,255', 24);
         popText('TIME ON', player.x + player.w / 2, player.y - 30, '#19f0ff', 1.0);
+        audio.warpEnd && audio.warpEnd();
       }
     }
     if (phaseFrames > 0) {
@@ -3469,6 +3481,7 @@
           shake = Math.max(shake, 6);
           slowmoFrames = Math.max(slowmoFrames, 10);
           music.duck();
+          audio.warp && audio.warp();
           missionEvent('timewarp');
           lifeTimewarps++; writeLS('glitchrun.v1.lifeTimewarps', lifeTimewarps);
           if (!hasAch('timewarp_first')) unlock('timewarp_first');
