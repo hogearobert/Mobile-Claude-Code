@@ -3249,6 +3249,13 @@
           runNearMisses++;
           missionEvent('near_miss');
           if (runNearMisses >= 10 && !hasAch('nm_clutch')) unlock('nm_clutch');
+          // Sparks flying off the contact edge — sells the scrape physically
+          for (let i = 0; i < 12; i++) {
+            const sa = -Math.PI * 0.35 + (Math.random() - 0.5) * 1.2;
+            const sv = 3 + Math.random() * 4;
+            pushParticle(nx, ny, Math.cos(sa) * sv, Math.sin(sa) * sv - 1, 22,
+              ['#ff3df0', '#ffe14a', '#fff'][i % 3], 1 + Math.random() * 1.5);
+          }
         } else if (gap > 0 && gap < 18) {
           const gain = (10 + nmSkinBonus) * feverScoreMult();
           score += gain;
@@ -4309,7 +4316,20 @@
     const eyeY = -baseR * 0.08 + look * baseR * 0.22;
     const eyeDX = baseR * 0.30, eyeR = baseR * 0.165;
     const blink = (frame % 200) < 6 ? 0.15 : 1; // occasional blink
-    ctx.fillStyle = '#0a0e1e';
+    // Mood-driven eye colour — eyes pick up the dominant aura so the orb
+    // feels reactive to its state. Priority: OVERDRIVE > timewarp > sprint > phase > normal.
+    let eyeFill = '#0a0e1e';
+    if (feverActive) {
+      const hue = (frame * 6) % 360;
+      eyeFill = 'hsl(' + hue + ',95%,55%)';
+    } else if (timewarpFrames > 0) {
+      eyeFill = '#0a4a6e';
+    } else if (sprintFrames > 0) {
+      eyeFill = '#7a0a3a';
+    } else if (phaseFrames > 0) {
+      eyeFill = '#3a0a6e';
+    }
+    ctx.fillStyle = eyeFill;
     for (const ex of [-eyeDX, eyeDX]) {
       ctx.beginPath();
       ctx.ellipse(ex, eyeY, eyeR, eyeR * blink, 0, 0, Math.PI * 2);
@@ -4854,7 +4874,7 @@
     }
     // Dust motes — tiny bright specks closest to the lens. During OVERDRIVE
     // they shift hot-pink and stretch into short streaks so the whole scene
-    // visibly screams the multiplier.
+    // visibly screams the multiplier. In PRISM they cycle through the spectrum.
     if (feverActive) {
       for (const mo of fgMotes) {
         const a = 0.35 + 0.25 * Math.sin(mo.tw);
@@ -4864,6 +4884,16 @@
         g.addColorStop(1, 'rgba(255,80,220,0)');
         ctx.fillStyle = g;
         ctx.fillRect(mo.x, mo.y - mo.r, streakLen, mo.r * 2);
+      }
+    } else if (palette.prism) {
+      for (let i = 0; i < fgMotes.length; i++) {
+        const mo = fgMotes[i];
+        const a = 0.30 + 0.22 * Math.sin(mo.tw);
+        const hue = (frame * 2 + i * 18 + mo.x * 0.3) % 360;
+        ctx.fillStyle = 'hsla(' + hue + ',95%,72%,' + a + ')';
+        ctx.beginPath();
+        ctx.arc(mo.x, mo.y, mo.r + 0.4, 0, Math.PI * 2);
+        ctx.fill();
       }
     } else {
       for (const mo of fgMotes) {
