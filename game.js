@@ -1833,6 +1833,7 @@
     shake = 18;
     zoomPunch = 0.09;
     music.stop();
+    if (music.setIntense) music.setIntense(false); // don't leak OVERDRIVE intensity into menu ambience
     audio.hit();
     setTimeout(() => audio.over(), 220);
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
