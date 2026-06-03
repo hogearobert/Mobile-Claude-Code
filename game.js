@@ -1240,7 +1240,8 @@
     { id: 'combo',   name: 'COMBO +',   desc: '+15% fereastră de combo',   costs: [70, 200, 500],  icon: '🔥' },
     { id: 'stars',   name: 'STAR +',    desc: '+1 stea per pickup',         costs: [80, 250, 700],  icon: '★'  },
     { id: 'air',     name: 'AIR +',     desc: '+25% bonus air-time',        costs: [70, 200, 500],  icon: '🪂' },
-    { id: 'sprint',  name: 'BOOST +',   desc: '+1s la durata Sprint-ului', costs: [90, 280, 700],  icon: '⚡' }
+    { id: 'sprint',  name: 'BOOST +',   desc: '+1s la durata Sprint-ului', costs: [90, 280, 700],  icon: '⚡' },
+    { id: 'warp',    name: 'WARP +',    desc: '+1s la durata TIME WARP',   costs: [120, 350, 850], icon: '⏱' }
   ];
   const upgKey = (id) => NS + 'upg.' + id;
   function upgLvl(id) { return parseInt(readLS(upgKey(id), '0'), 10) || 0; }
@@ -1956,6 +1957,35 @@
     audio.hit();
     setTimeout(() => audio.over(), 220);
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
+    // Shatter burst — the orb dissolves into dozens of skin-tinted shards.
+    // Doubles as a clear "you died HERE" cue and makes the final frame
+    // memorable instead of just freezing.
+    {
+      const sk = currentSkin();
+      const cx = player.x + player.w / 2;
+      const cyp = player.y + player.h / 2;
+      flashFrame = frame;
+      glitchFrame = frame;
+      addRing(cx, cyp, 160, sk.trail, 36);
+      addRing(cx, cyp, 100, '255,255,255', 28);
+      addRing(cx, cyp, 200, '255,61,110', 44);
+      for (let i = 0; i < 70; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = Math.random() * 9 + 3;
+        const col = i % 3 === 0 ? '#ff3df0'
+                  : i % 3 === 1 ? '#ffe14a'
+                  : ('rgb(' + sk.trail + ')');
+        pushParticle(cx, cyp, Math.cos(a) * v, Math.sin(a) * v, 50 + Math.random() * 30,
+          col, Math.random() * 3 + 1.5);
+      }
+      // Six bigger shards in skin tint — chunkier than dust, sells the break
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
+        const v = Math.random() * 7 + 4;
+        pushParticle(cx, cyp, Math.cos(a) * v, Math.sin(a) * v, 80,
+          'rgb(' + sk.trail + ')', 4 + Math.random() * 3);
+      }
+    }
     let newRecord = false;
     let goalMsg = '';
     if (dailyMode) {
@@ -3427,8 +3457,8 @@
           if (!hasAch('sprint_first')) unlock('sprint_first');
         } else if (p.type === 'timewarp') {
           // TIME WARP — slows obstacles + meteors, leaves player input fully reactive.
-          // PRISM skin extends the duration; upgrade-agnostic for now (room to grow).
-          const dur = 60 * (4 + perkVal('timewarp'));
+          // Stacks: base 4s + WARP upgrade levels + TEMPO skin perk.
+          const dur = 60 * (4 + upgLvl('warp') + perkVal('timewarp'));
           timewarpFrames = Math.max(timewarpFrames, dur);
           popText('⏱ TIME WARP', p.x, p.y - 24, '#19f0ff', 1.5);
           addRing(p.x, p.y, 110, '120,230,255', 34);
