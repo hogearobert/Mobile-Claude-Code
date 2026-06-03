@@ -644,7 +644,10 @@
     { name: 'ULTRA',    sky: ['#1a0a1a', '#3d0a3d', '#52145a'], sun: '#ff3df0', sunRGB: '255,80,240',  mountainHue: 300, accent: '255,120,255', ground: '#1a0a1a', weather: 'leaves' },
     // PRISM — endgame rainbow biome, palette is a placeholder; the actual sky
     // hue cycles every frame inside drawBackground for a living spectrum effect.
-    { name: 'PRISM',    sky: ['#0a0418', '#1a063a', '#3a0a52'], sun: '#ffffff', sunRGB: '255,255,255', mountainHue: 0,   accent: '255,255,255', ground: '#0a0418', weather: 'none', prism: true }
+    { name: 'PRISM',    sky: ['#0a0418', '#1a063a', '#3a0a52'], sun: '#ffffff', sunRGB: '255,255,255', mountainHue: 0,   accent: '255,255,255', ground: '#0a0418', weather: 'none', prism: true },
+    // VOID — true endless cap biome: deep black with shifting violet/cyan stars
+    // and a black-sun (event horizon) effect, drawn in drawBackground.
+    { name: 'VOID',     sky: ['#000004', '#04000c', '#0a0214'], sun: '#7a3dff', sunRGB: '120,80,220',  mountainHue: 270, accent: '160,120,255', ground: '#000004', weather: 'none', void: true }
   ];
   const LEVEL_SCORE = 500;
   let levelIdx = 0;
@@ -676,6 +679,84 @@
   let shieldFlashFrame = -1000;
   let invincibleUntil = -1;
   let reviveUsed = false;
+
+  // ---------- AIR-DASH (third-tap skill expression in air) ----------
+  // After both jumps are spent, one more tap fires a forward dash that briefly
+  // freezes vertical motion, gives 14 frames of invuln, and shatters any
+  // spike/block the dash passes through. One dash per airborne arc; resets on
+  // ground contact. Pure skill ceiling — opens new movement routes & rescues.
+  let dashFrames = 0;          // remaining frames of dash active (~14)
+  let dashCooldown = 0;        // frames until next dash allowed (resets on land)
+  let dashUsed = false;        // one dash per air-arc; reset on landing
+  let lifeDashes = parseInt(readLS('glitchrun.v1.lifeDashes', '0'), 10) || 0;
+  let dashSmashes = 0;         // obstacles shattered this dash (for big-dash trophy)
+  const DASH_DUR = 14;
+  function isDashing() { return dashFrames > 0; }
+  // STAR BURST — instant coin shower + 4s of 3× score on top of normal mults
+  let burstFrames = 0;       // 0..240 active window
+  const BURST_DUR = 60 * 4;
+  function burstMult() { return burstFrames > 0 ? 3 : 1; }
+  function airDash() {
+    if (state !== STATE.PLAY) return;
+    if (player.onGround) return;
+    if (dashUsed) return;
+    if (frame < inputGraceUntil) return;
+    dashUsed = true;
+    dashFrames = DASH_DUR;
+    dashSmashes = 0;
+    player.vy = -2.5;                                 // tiny upward kick so dash glides flat
+    invincibleUntil = Math.max(invincibleUntil, frame + DASH_DUR + 2);
+    lifeDashes++; writeLS('glitchrun.v1.lifeDashes', lifeDashes);
+    missionEvent('dash');
+    if (!hasAch('dash_first')) unlock('dash_first');
+    if (lifeDashes >= 50 && !hasAch('dash_master')) unlock('dash_master');
+    audio.djump && audio.djump();
+    if (audio.power) audio.power();
+    if (navigator.vibrate) { try { navigator.vibrate([8, 14, 22]); } catch (_) {} }
+    shake = Math.max(shake, 6);
+    zoomPunch = Math.max(zoomPunch, 0.045);
+    flashFrame = frame;
+    popText('DASH!', player.x + player.w / 2, player.y, '#19f0ff', 1.15);
+    const cx0 = player.x + player.w / 2;
+    const cy0 = player.y + player.h / 2;
+    addRing(cx0, cy0, 80, '25,240,255', 18);
+    addRing(cx0, cy0, 50, '255,255,255', 14);
+    // Forward spark fan — sells the burst direction
+    for (let i = 0; i < 14; i++) {
+      const a = (Math.random() - 0.5) * 0.9;
+      const v = 4 + Math.random() * 6;
+      pushParticle(cx0, cy0,
+        Math.cos(a) * v + 2, Math.sin(a) * v,
+        24, ['#19f0ff', '#fff', '#ff3df0'][i % 3], 1 + Math.random() * 2);
+    }
+  }
+  // Shatter any spike/block the dash hits — scores a small bonus per kill.
+  function dashSmashObstacles(pcx, pcy, pcr) {
+    if (dashFrames <= 0) return;
+    for (const o of obstacles) {
+      if (o.x < -100 || o.dashCleared) continue;
+      // Only ground-shatterables (spikes/blocks) break. Flyers/overhangs are immune.
+      if (o.type !== 'spike' && o.type !== 'block') continue;
+      if (!obstacleHit(o, pcx, pcy, pcr + 4)) continue;
+      o.dashCleared = true;
+      o.x = -9999;
+      dashSmashes++;
+      const gain = 18 * feverScoreMult();
+      score += gain;
+      addFever(0.04);
+      shake = Math.max(shake, 4);
+      const col = o.type === 'spike' ? '255,80,160' : '120,230,255';
+      addRing(o.x + o.w / 2, pcy, 56, col, 18);
+      popText('+' + gain, o.x + o.w / 2, pcy - 30, '#19f0ff', 0.95);
+      for (let i = 0; i < 10; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = 2 + Math.random() * 5;
+        pushParticle(o.x + o.w / 2, pcy, Math.cos(a) * v, Math.sin(a) * v, 22,
+          'rgba(' + col + ',0.9)', Math.random() * 3 + 1);
+      }
+      if (dashSmashes === 3 && !hasAch('dash_triple')) unlock('dash_triple');
+    }
+  }
 
   // ---------- OVERDRIVE / Fever (build-a-meter → multiplier frenzy) ----------
   // Coins, near-misses and combo milestones charge the meter. Full = OVERDRIVE:
@@ -822,7 +903,11 @@
   let setpiece = null;
   let setpieceCount = 0;
   let nextSetpieceAt = 1800;
-  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado', 'hyperspace', 'nemesis'];
+  const SETPIECE_TYPES = ['coinrush', 'gauntlet', 'lowg', 'meteor', 'storm', 'tornado', 'hyperspace', 'nemesis', 'laser'];
+  // LASER GRID set-piece — pulsing vertical beams that flicker on/off in pattern.
+  // Stored as a simple `lasers` array (separate from obstacles so render & timing
+  // are independent). Each laser has its own phase so the field reads as alive.
+  let lasers = [];
   // NEMESIS chase — a shadow version of the player creeps in from behind,
   // gaining ground each frame. The player must keep clearing obstacles fast
   // (each clear pushes it back). Hits the player on x-overlap → death.
@@ -838,6 +923,7 @@
               : type === 'storm' ? 480
               : type === 'hyperspace' ? 460
               : type === 'nemesis' ? 520
+              : type === 'laser' ? 500
               : 560;
     setpiece = { type, t: 0, dur, spawnTimer: 30, vortex: 0 };
     obstacles = obstacles.filter((o) => o.x < W * 0.55);
@@ -863,6 +949,11 @@
         eyePhase: 0
       };
     }
+    if (type === 'laser') {
+      showTipOnce('laser', '⚡ LASER GRID', 'Lasere pulsează în ritm — treci când scapără între pulsuri!');
+      lasers = [];
+      obstacles = [];
+    }
     const label = type === 'coinrush' ? '★ COIN RUSH ★'
                 : type === 'tornado' ? '🌪 TORNADO 🌪'
                 : type === 'lowg' ? '🌙 LOW-G 🌙'
@@ -870,6 +961,7 @@
                 : type === 'storm' ? '⛈ STORM ⛈'
                 : type === 'hyperspace' ? '🌌 HYPERSPACE 🌌'
                 : type === 'nemesis' ? '👁 NEMESIS 👁'
+                : type === 'laser' ? '⚡ LASER GRID ⚡'
                 : '⚡ GAUNTLET ⚡';
     const col = type === 'coinrush' ? '#ffe14a'
               : type === 'tornado' ? '#b478ff'
@@ -878,6 +970,7 @@
               : type === 'storm' ? '#19f0ff'
               : type === 'hyperspace' ? '#b478ff'
               : type === 'nemesis' ? '#ff0a3d'
+              : type === 'laser' ? '#ff3df0'
               : '#ff3d6e';
     popText(label, W / 2, GROUND - 210, col, 1.7);
     shake = Math.max(shake, 9);
@@ -1049,6 +1142,39 @@
           });
         }
       }
+    } else if (setpiece.type === 'laser') {
+      // LASER GRID — vertical laser walls scroll in. Each laser has a 60-frame
+      // pulse cycle (on/off pattern) — player threads the gaps. Coin arcs spawn
+      // BETWEEN walls so survival is rewarded with star pickups.
+      if (setpiece.spawnTimer <= 0) {
+        const r = rnd();
+        if (r < 0.78) {
+          // 50/50 low vs high beam — high beam blocks upper air (jump under),
+          // low beam blocks lower lane (jump over). Phase staggered so the player
+          // can't just memorise one rhythm.
+          const high = rnd() < 0.5;
+          const cycle = 60;
+          const onFrames = 22; // beam visible 22/60 frames → 38f safe window
+          const phase = Math.floor(rnd() * cycle);
+          lasers.push({
+            x: W + 30,
+            high,                // true = beam from ceiling down (jump under it)
+            cycle, onFrames,
+            phase,
+            t: 0,
+            w: 14
+          });
+          setpiece.spawnTimer = 42 + Math.floor(rnd() * 18);
+        } else {
+          // bonus coin arc between walls
+          const baseY = GROUND - 120 - rnd() * 60;
+          for (let i = 0; i < 5; i++) {
+            coinsArr.push({ x: W + 30 + i * 28, y: baseY - Math.sin((i / 4) * Math.PI) * 38,
+              r: 14, picked: false, type: rollGem(), t: rnd() * 6.28 });
+          }
+          setpiece.spawnTimer = 50;
+        }
+      }
     } else if (setpiece.type === 'lowg') {
       // Floaty harvest — tall coin arcs reachable thanks to the long hang-time,
       // with the occasional wide-spaced hazard so it isn't a pure freebie.
@@ -1140,6 +1266,17 @@
         shake = Math.max(shake, 9);
         audio.power();
         if (!hasAch('hyperspace')) unlock('hyperspace');
+      } else if (setpiece.type === 'laser') {
+        runCoins += 130;
+        popText('+130 ★  LASER GRID CLEAR!', W / 2, GROUND - 200, '#ff3df0', 1.55);
+        addRing(W / 2, GROUND - 120, 220, '255,61,240', 38);
+        addRing(W / 2, GROUND - 120, 160, '255,255,255', 30);
+        addFever(0.20);
+        shake = Math.max(shake, 10);
+        audio.power();
+        lasers = [];
+        missionEvent('laser_survived');
+        if (!hasAch('laser_survive')) unlock('laser_survive');
       }
       setpiece = null;
       nextObstacleAt = frame + 75;
@@ -1243,7 +1380,13 @@
     { id: 'prism_biome',   name: 'Spectrum',             desc: 'Ajunge la biomul PRISM',        reward: 350 },
     { id: 'trick_combo',   name: 'Acrobat',              desc: 'Trece peste 2 obstacole într-un singur salt', reward: 40 },
     { id: 'trick_pro',     name: 'Maestru Acrobat',      desc: 'Trece peste 4 obstacole într-un singur salt', reward: 120 },
-    { id: 'nemesis_survive', name: 'Învingător de Umbre', desc: 'Supraviețuiește un NEMESIS', reward: 150 }
+    { id: 'nemesis_survive', name: 'Învingător de Umbre', desc: 'Supraviețuiește un NEMESIS', reward: 150 },
+    { id: 'dash_first',    name: 'Air Dash',              desc: 'Folosește primul tău AIR-DASH', reward: 30 },
+    { id: 'dash_triple',   name: 'Dash Storm',            desc: 'Sparge 3 obstacole într-un singur dash', reward: 100 },
+    { id: 'dash_master',   name: 'Maestrul Dash',         desc: '50 de AIR-DASH-uri folosite', reward: 220 },
+    { id: 'starburst_first', name: 'Pioaie de Stele',     desc: 'Folosește un STAR BURST',     reward: 40 },
+    { id: 'laser_survive', name: 'Tăietor de Lasere',     desc: 'Supraviețuiește un LASER GRID', reward: 130 },
+    { id: 'void_biome',    name: 'Dincolo de Lumină',     desc: 'Ajunge la biomul VOID',       reward: 500 }
   ];
   const achKey = (id) => SK.achievements + '.' + id;
   // In-memory unlock cache — avoids a synchronous localStorage read per trophy
@@ -1336,7 +1479,10 @@
     { id: 'phase_x',    type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează PHASE de ' + m.goal + ' ori', reward: 55 },
     { id: 'slam_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*4) }),              label: (m) => 'Distruge ' + m.goal + ' obstacole cu Dive-Slam', reward: 50 },
     { id: 'timewarp_x', type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Activează TIME WARP de ' + m.goal + ' ori', reward: 55 },
-    { id: 'nemesis_x',  type: 'event', mk: () => ({ goal: 1 }),                                            label: () => 'Supraviețuiește un NEMESIS', reward: 70 }
+    { id: 'nemesis_x',  type: 'event', mk: () => ({ goal: 1 }),                                            label: () => 'Supraviețuiește un NEMESIS', reward: 70 },
+    { id: 'dash_x',     type: 'event', mk: () => ({ goal: 3 + Math.floor(Math.random()*5) }),              label: (m) => 'Folosește ' + m.goal + ' AIR-DASH', reward: 45 },
+    { id: 'starburst_x', type: 'event', mk: () => ({ goal: 1 + Math.floor(Math.random()*2) }),              label: (m) => 'Folosește ' + m.goal + ' STAR BURST', reward: 55 },
+    { id: 'laser_x',    type: 'event', mk: () => ({ goal: 1 }),                                            label: () => 'Supraviețuiește un LASER GRID', reward: 65 }
   ];
   const MK = { current: SK.skinUnlocked + '.current' };
 
@@ -1392,6 +1538,9 @@
       else if (m.id === 'slam_x' && type === 'slam') inc = value || 1;
       else if (m.id === 'timewarp_x' && type === 'timewarp') inc = 1;
       else if (m.id === 'nemesis_x' && type === 'nemesis_survived') inc = 1;
+      else if (m.id === 'dash_x' && type === 'dash') inc = 1;
+      else if (m.id === 'starburst_x' && type === 'starburst') inc = 1;
+      else if (m.id === 'laser_x' && type === 'laser_survived') inc = 1;
       else if (m.id === 'score_x' && type === 'gameover' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'combo_x' && type === 'combo' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
       else if (m.id === 'level_x' && type === 'level' && value >= m.n) { m.progress = 1; m.done = true; any = true; }
@@ -1930,6 +2079,7 @@
     obstacles = [];
     coinsArr = [];
     meteors = [];
+    lasers = [];
     particles = [];
     rings = [];
     scrollX = 0;
@@ -1976,6 +2126,11 @@
     shieldActive = false;
     sprintFrames = 0;
     timewarpFrames = 0;
+    dashFrames = 0;
+    dashCooldown = 0;
+    dashUsed = false;
+    dashSmashes = 0;
+    burstFrames = 0;
     shieldFlashFrame = -1000;
     invincibleUntil = -1;
     reviveUsed = false;
@@ -2240,6 +2395,9 @@
       // Defer briefly to tell a tap from the start of a swipe-down
       pendingJump = true;
       pendingJumpFrame = frame;
+    } else if (player.jumps >= player.maxJumps && !dashUsed && !player.sliding) {
+      // Both jumps spent + no dash yet + not in a dive → 3rd tap fires AIR-DASH
+      airDash();
     } else {
       jump(); // airborne: double-jump fires instantly
     }
@@ -2269,6 +2427,7 @@
       if (e.repeat) return;
       if (state === STATE.MENU) startGame();
       else if (state === STATE.OVER) startGame();
+      else if (!player.onGround && player.jumps >= player.maxJumps && !dashUsed && !player.sliding) airDash();
       else jump();
     } else if (e.code === 'ArrowDown') {
       e.preventDefault();
@@ -2646,7 +2805,8 @@
   function spawnPowerup() {
     // Weighted pool — PHASE (ghost mode) is the rare, exciting drop.
     // TIME WARP is uncommon: slows the world, hugely empowering at high speed.
-    const pool = ['magnet', 'magnet', 'shield', 'shield', 'sprint', 'sprint', 'phase', 'timewarp'];
+    // STAR BURST: instant dopamine drop — coin rain + brief 3× score window.
+    const pool = ['magnet', 'magnet', 'shield', 'shield', 'sprint', 'sprint', 'phase', 'timewarp', 'starburst', 'starburst'];
     const t = pool[Math.floor(rnd() * pool.length)];
     const p = {
       type: t,
@@ -2690,7 +2850,26 @@
       music.duck();
       missionEvent('level', levelIdx);
       music.setLevel(levelIdx);
-      if (palette.prism) {
+      if (palette.void) {
+        // VOID — the true endless cap, awarded to the deepest runs only.
+        if (!hasAch('void_biome')) unlock('void_biome');
+        popText('🕳 VOID — EVENT HORIZON 🕳', W / 2, GROUND - 290, '#b478ff', 2.0);
+        addRing(W / 2, GROUND - 180, 380, '120,80,220', 60);
+        addRing(W / 2, GROUND - 180, 280, '60,40,150', 48);
+        addRing(W / 2, GROUND - 180, 200, '255,255,255', 38);
+        addFever(0.35);
+        slowmoFrames = Math.max(slowmoFrames, 24);
+        glitchFrame = frame;
+        shake = Math.max(shake, 16);
+        for (let i = 0; i < 90; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const v = Math.random() * 12 + 4;
+          const col = i % 4 === 0 ? '#7a3dff' : i % 4 === 1 ? '#19f0ff' : i % 4 === 2 ? '#fff' : '#1a0640';
+          pushParticle(W / 2, GROUND - 160, Math.cos(a) * v, Math.sin(a) * v, 110,
+            col, Math.random() * 4 + 2);
+        }
+        if (navigator.vibrate) { try { navigator.vibrate([40, 80, 40, 80, 40, 80, 400]); } catch (_) {} }
+      } else if (palette.prism) {
         // PRISM is the new endgame cap — extra cinematic burst beyond ULTRA's.
         if (!hasAch('prism_biome')) unlock('prism_biome');
         popText('🌈 PRISM — SPECTRUM ZONE 🌈', W / 2, GROUND - 290, '#fff', 1.9);
@@ -2708,11 +2887,12 @@
         }
         if (navigator.vibrate) { try { navigator.vibrate([30, 60, 30, 60, 30, 60, 300]); } catch (_) {} }
       }
-      // Final-biome milestone — extra spectacle when the player reaches ULTRA,
-      // marking the cap of the level progression. Fires once per level-up, not
-      // every frame.
-      if (levelIdx === LEVELS.length - 1) {
-        popText('✨ ULTRA — BIOM MAX ✨', W / 2, GROUND - 260, '#ff3df0', 1.8);
+      // Final-biome milestone — extra spectacle when the player reaches the
+      // very last biome (VOID), marking the absolute cap of the level
+      // progression. Fires once per level-up, not every frame. Skipped if the
+      // VOID-specific cinematic above already played for the same level-up.
+      if (levelIdx === LEVELS.length - 1 && !palette.void) {
+        popText('✨ BIOM MAX ✨', W / 2, GROUND - 260, '#ff3df0', 1.8);
         addRing(W / 2, GROUND - 160, 320, '255,61,240', 50);
         addRing(W / 2, GROUND - 160, 240, '25,240,255', 42);
         addFever(0.25);
@@ -2956,7 +3136,28 @@
     // hop. Pure additive skill expression; a normal tap-and-release is unchanged.
     const charging = ptrDown && !player.sliding && !player.onGround
       && player.vy < 0 && (frame - lastJumpFrame) < 14;
-    const gMul = (player.sliding && !player.onGround) ? 2.4 : (charging ? 0.45 : 1);
+    // AIR-DASH active: zero gravity (forward glide), slight upward to flatten arc
+    if (dashFrames > 0) {
+      dashFrames--;
+      player.vy *= 0.55;                              // dampen vertical, glide forward
+      // Drop a bright after-image streak as a particle every other frame
+      if ((frame & 1) === 0) {
+        const sk = currentSkin();
+        pushParticle(player.x + player.w / 2, player.y + player.h / 2,
+          -3 - Math.random() * 2, (Math.random() - 0.5) * 1.2,
+          18, 'rgba(' + sk.trail + ',0.85)', 2 + Math.random() * 1.5);
+        pushParticle(player.x + player.w / 2 - 8, player.y + player.h / 2,
+          -4 - Math.random() * 3, (Math.random() - 0.5) * 1.5,
+          14, 'rgba(255,255,255,0.7)', 1 + Math.random());
+      }
+      // Score milestone — dashing through obstacles is the gameplay payoff;
+      // checked against the dashing player's centre (slide collisions ignored
+      // during a dash since invuln is set).
+      const pcxD = player.x + player.w / 2;
+      const pcyD = player.y + player.h / 2;
+      dashSmashObstacles(pcxD, pcyD, 20);
+    } else if (dashUsed && !player.onGround && dashCooldown > 0) dashCooldown--;
+    const gMul = (player.sliding && !player.onGround) ? 2.4 : (charging ? 0.45 : (dashFrames > 0 ? 0 : 1));
     player.vy += gravity * gMul;
     // Tiny upward boost-flame motes while charge-holding — telegraphs the tech
     if (charging && (frame & 1) === 0) {
@@ -3013,6 +3214,9 @@
       player.onGround = true;
       player.jumps = 0;
       player.rot = 0;
+      // Reset air-dash quota each time we touch ground
+      dashUsed = false;
+      dashCooldown = 0;
     } else {
       player.onGround = false;
       player.rot += 0.15;
@@ -3137,6 +3341,11 @@
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
     springs.forEach((s) => { s.x -= wSpeed; s.t += 0.15; if (s.used > 0) s.used--; });
     springs = springs.filter((s) => s.x + s.w > -30);
+    // Lasers scroll with the world; each one's pulse advances independently
+    if (lasers.length) {
+      for (const ls of lasers) { ls.x -= wSpeed; ls.t++; }
+      lasers = lasers.filter((ls) => ls.x > -40);
+    }
     // Slam cracks scroll + fade
     if (slamCracks.length) {
       for (const c of slamCracks) { c.x -= wSpeed; c.life--; }
@@ -3301,6 +3510,42 @@
       }
     }
 
+    // Laser collisions — each "on" laser is a tall rectangle covering its lane.
+    // PHASE / dash invuln / shield are honoured. SCORE bonus for threading the
+    // gap when the laser is "off" (similar to near-miss).
+    if (lasers.length) {
+      for (const ls of lasers) {
+        // pulse phase: ON when (t + phase) % cycle < onFrames
+        const ph = (ls.t + ls.phase) % ls.cycle;
+        const onNow = ph < ls.onFrames;
+        // record this laser's last-known on-state for the renderer to telegraph charge
+        ls._on = onNow;
+        if (!onNow) continue;
+        // High laser fills upper half (slide under); low fills lower (jump over)
+        const ry = ls.high ? 0 : GROUND - 60;
+        const rh = ls.high ? GROUND - 60 : 60;
+        if (frame > invincibleUntil && circleRectHit(pcx, pcy, pcr, ls.x, ry, ls.w, rh)) {
+          if (shieldActive) {
+            shieldActive = false;
+            shieldFlashFrame = frame;
+            invincibleUntil = frame + 60;
+            slowmoFrames = 30;
+            glitchFrame = frame; flashFrame = frame;
+            zoomPunch = Math.max(zoomPunch, 0.07);
+            addRing(pcx, pcy, 110, '255,61,240', 30);
+            ls.x = -999;
+            shake = Math.max(shake, 14);
+            audio.hit();
+            popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.4);
+            unlock('shield_save');
+            break;
+          }
+          gameOver();
+          return;
+        }
+      }
+    }
+
     // Collisions — player is a circle, each obstacle tested by its true shape
     if (frame > invincibleUntil) {
       for (const o of obstacles) {
@@ -3445,7 +3690,7 @@
         lastCoinFrame = frame;
         lastCoinX = c.x; lastCoinY = c.y;
         const m = comboMult();
-        const gain = 5 * m * feverScoreMult() * sprintMult() * gm;
+        const gain = 5 * m * feverScoreMult() * sprintMult() * gm * burstMult();
         score += gain;
         audio.coin(combo - 1);
         if (gm > 1) {
@@ -3563,6 +3808,43 @@
           if (!hasAch('timewarp_first')) unlock('timewarp_first');
           if (lifeTimewarps >= 20 && !hasAch('timewarp_master')) unlock('timewarp_master');
           showTipOnce('timewarp', '⏱ TIME WARP', 'Lumea încetinește — tu nu. Folosește momentul!');
+        } else if (p.type === 'starburst') {
+          // STAR BURST — drop a wide rainbow arc of bonus coins above the player
+          // PLUS open a 4-second 3× score window. Pure dopamine moment.
+          burstFrames = Math.max(burstFrames, BURST_DUR);
+          const baseY = GROUND - 180 - rnd() * 60;
+          const n = 14;
+          for (let i = 0; i < n; i++) {
+            const f = i / (n - 1);
+            const cx2 = p.x + 40 + i * 28;
+            const cy2 = baseY - Math.sin(f * Math.PI) * 70;
+            coinsArr.push({
+              x: cx2, y: cy2, r: 14, picked: false,
+              type: rnd() < 0.18 ? 'blue' : (rnd() < 0.04 ? 'red' : 'star'),
+              t: rnd() * 6.28
+            });
+          }
+          popText('★ STAR BURST ★', p.x, p.y - 24, '#ffe14a', 1.6);
+          addRing(p.x, p.y, 130, '255,225,74', 38);
+          addRing(p.x, p.y, 80,  '255,80,220', 28);
+          addRing(p.x, p.y, 50,  '255,255,255', 22);
+          flashFrame = frame;
+          shake = Math.max(shake, 8);
+          zoomPunch = Math.max(zoomPunch, 0.08);
+          slowmoFrames = Math.max(slowmoFrames, 8);
+          music.duck();
+          addFever(0.18);
+          // Bright burst particles
+          for (let i = 0; i < 36; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const v = Math.random() * 8 + 3;
+            pushParticle(p.x, p.y, Math.cos(a) * v, Math.sin(a) * v, 55,
+              ['#ffe14a','#ff3df0','#19f0ff','#fff'][i & 3], Math.random() * 3 + 1.5);
+          }
+          if (navigator.vibrate) { try { navigator.vibrate([14, 22, 60]); } catch (_) {} }
+          if (!hasAch('starburst_first')) unlock('starburst_first');
+          missionEvent('starburst');
+          showTipOnce('starburst', '★ STAR BURST', '4s de scor ×3 — adună tot ce poți!');
         } else if (p.type === 'phase') {
           const dur = 60 * (5 + perkVal('phase')); // PHANTOM skin: +2s
           phaseFrames = Math.max(phaseFrames, dur);
@@ -3599,12 +3881,22 @@
       magnetFrames = Math.max(magnetFrames, 2);
       if (--feverFrames <= 0) endFever();
     }
+    // STAR BURST countdown — 3× score window with magnet topped up so you sweep
+    // all the bonus coins it spawned. Ends with a soft pulse.
+    if (burstFrames > 0) {
+      burstFrames--;
+      magnetFrames = Math.max(magnetFrames, 2);
+      if (burstFrames === 0) {
+        addRing(player.x + player.w / 2, player.y + player.h / 2, 110, '255,225,74', 22);
+        popText('BURST END', player.x + player.w / 2, player.y - 30, '#ffe14a', 1.0);
+      }
+    }
     if (frame % 2 === 0) { updateFeverUI(); updatePowerHud(); updateRecordProgress(); }
 
     // dist drives all pacing (level / speed / spawns) — steady, coin-independent.
     dist += 1;
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
-    score += (1 + levelIdx * 0.1) * feverScoreMult() * sprintMult();
+    score += (1 + levelIdx * 0.1) * feverScoreMult() * sprintMult() * burstMult();
     tryLevelUp();
     // Mid-run record celebration — fires the frame the player crosses their
     // previous best. Single-shot via the flag; only meaningful when there IS
@@ -3690,7 +3982,25 @@
     envCache = { pal: palette, h: H, haze, refl };
   }
   function drawBackground() {
-    if (palette.prism) {
+    if (palette.void) {
+      // VOID biome — pitch-black sky with a slow drifting violet/cyan glow
+      // and event-horizon vignette at the centre-right. Endless cap aesthetic.
+      ctx.fillStyle = '#000004';
+      ctx.fillRect(0, 0, W, H);
+      const violet = ctx.createRadialGradient(W * 0.78, GROUND - 240, W * 0.05, W * 0.78, GROUND - 240, W * 0.85);
+      const breathe = 0.85 + 0.15 * Math.sin(frame * 0.018);
+      violet.addColorStop(0, 'rgba(120,80,220,' + (0.42 * breathe) + ')');
+      violet.addColorStop(0.4, 'rgba(60,40,140,' + (0.22 * breathe) + ')');
+      violet.addColorStop(1, 'rgba(10,4,30,0)');
+      ctx.fillStyle = violet;
+      ctx.fillRect(0, 0, W, H);
+      // Subtle distant cyan glow on the left, makes the scene feel cosmic
+      const cyan = ctx.createRadialGradient(W * 0.18, GROUND - 360, 0, W * 0.18, GROUND - 360, W * 0.45);
+      cyan.addColorStop(0, 'rgba(25,240,255,' + (0.12 * breathe) + ')');
+      cyan.addColorStop(1, 'rgba(25,240,255,0)');
+      ctx.fillStyle = cyan;
+      ctx.fillRect(0, 0, W, H);
+    } else if (palette.prism) {
       // PRISM biome — sky is a constantly drifting spectrum. Three hue-shifted
       // bands stacked vertically read as a living aurora-tinted sky. Built each
       // frame (cheap) instead of caching, so the colour actually moves.
@@ -3884,6 +4194,35 @@
 
     // Sun body with rich vertical gradient (top bright → bottom saturated).
     // PRISM biome: the sun itself becomes a rainbow disc, cycling vertically.
+    // VOID biome: the sun is a BLACK HOLE — pitch core ringed by a hot accretion
+    // disc that slowly rotates. Built-in spin via frame-based rotation.
+    if (palette.void) {
+      // Pure black core
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 0.95, 0, Math.PI * 2);
+      ctx.fill();
+      // Hot accretion ring with rotating colour bands
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const rotAcc = frame * 0.04;
+      for (let i = 0; i < 5; i++) {
+        const rad = R * (1.05 + i * 0.08);
+        const hue = (rotAcc * 30 + i * 60) % 360;
+        ctx.strokeStyle = 'hsla(' + hue + ',95%,62%,' + (0.55 - i * 0.10) + ')';
+        ctx.lineWidth = 4 - i * 0.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, rotAcc + i * 0.6, rotAcc + i * 0.6 + Math.PI * 1.5);
+        ctx.stroke();
+      }
+      // Brightest inner ring — the event horizon
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 0.98, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else {
     const body = ctx.createLinearGradient(0, cy - R, 0, cy + R);
     if (palette.prism) {
       const baseHue = (frame * 1.5) % 360;
@@ -3912,30 +4251,33 @@
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fill();
-
-    // Iconic bottom bands — tapered to sun silhouette, progressively thicker
-    ctx.fillStyle = palette.sky[0];
-    const bandDefs = [
-      { d: 0.08, h: 2 },
-      { d: 0.22, h: 2.6 },
-      { d: 0.38, h: 3.2 },
-      { d: 0.56, h: 3.8 },
-      { d: 0.78, h: 4.4 }
-    ];
-    for (const b of bandDefs) {
-      const by = cy + R * b.d;
-      const dy = by - cy;
-      const w = Math.sqrt(Math.max(0, R * R - dy * dy)) * 2;
-      if (w < 4) continue;
-      ctx.fillRect(cx - w / 2, by, w, b.h);
     }
 
-    // Thin rim light (top arc only, for that Outrun "neon edge" feel)
-    ctx.strokeStyle = 'rgba(255, 245, 210, 0.7)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, Math.PI * 1.1, Math.PI * 1.9);
-    ctx.stroke();
+    // Iconic bottom bands — tapered to sun silhouette, progressively thicker
+    // (skipped for VOID — the black hole has its own accretion treatment)
+    if (!palette.void) {
+      ctx.fillStyle = palette.sky[0];
+      const bandDefs = [
+        { d: 0.08, h: 2 },
+        { d: 0.22, h: 2.6 },
+        { d: 0.38, h: 3.2 },
+        { d: 0.56, h: 3.8 },
+        { d: 0.78, h: 4.4 }
+      ];
+      for (const b of bandDefs) {
+        const by = cy + R * b.d;
+        const dy = by - cy;
+        const w = Math.sqrt(Math.max(0, R * R - dy * dy)) * 2;
+        if (w < 4) continue;
+        ctx.fillRect(cx - w / 2, by, w, b.h);
+      }
+      // Thin rim light (top arc only, for that Outrun "neon edge" feel)
+      ctx.strokeStyle = 'rgba(255, 245, 210, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+    }
 
     // OVERDRIVE — the synthwave sun fires 8 radial light beams in all
     // directions, slowly rotating. Pure cinematic flourish for the climax.
@@ -4247,6 +4589,45 @@
       ctx.fillRect(t.x - r, t.y - r, r * 2, r * 2);
     }
 
+    // AIR-DASH after-image streak — bright cyan tunnel + 4 ghost echoes trailing
+    // behind the orb. Reads instantly as "you're punching through space".
+    if (dashFrames > 0) {
+      const dcx = player.x + player.w / 2;
+      const dcy = player.y + player.h / 2;
+      const fade = Math.min(1, dashFrames / 8);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // Five trailing echoes — bright cyan core, magenta fringe
+      for (let i = 1; i <= 5; i++) {
+        const ox = -i * 16;
+        const a = (0.55 - i * 0.10) * fade;
+        if (a <= 0.02) continue;
+        const rg = ctx.createRadialGradient(dcx + ox, dcy, 0, dcx + ox, dcy, 26);
+        rg.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+        rg.addColorStop(0.5, 'rgba(25,240,255,' + (a * 0.7) + ')');
+        rg.addColorStop(1, 'rgba(25,240,255,0)');
+        ctx.fillStyle = rg;
+        ctx.fillRect(dcx + ox - 26, dcy - 26, 52, 52);
+      }
+      // Forward streak — long bright horizontal beam ahead of the orb
+      const beamLen = 90 + (1 - dashFrames / DASH_DUR) * 80;
+      const beam = ctx.createLinearGradient(dcx - beamLen, dcy, dcx + 30, dcy);
+      beam.addColorStop(0, 'rgba(25,240,255,0)');
+      beam.addColorStop(0.55, 'rgba(255,255,255,' + (0.55 * fade) + ')');
+      beam.addColorStop(1, 'rgba(255,255,255,' + (0.85 * fade) + ')');
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.ellipse(dcx - beamLen / 2 + 15, dcy, beamLen / 2 + 8, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Pink rim flicker on the leading edge for chromatic punch
+      ctx.strokeStyle = 'rgba(255,61,240,' + (0.5 * fade) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(dcx + 6, dcy, 24, -Math.PI * 0.42, Math.PI * 0.42);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // PHASE ghost aura — translucent purple echoes streaming behind the orb,
     // plus a pulsing halo. Reads instantly as "intangible" without touching the
     // core orb render. Dims out over the final half-second as the power expires.
@@ -4546,6 +4927,35 @@
     }
     ctx.restore();
 
+    // High-combo orbital aura — at combo ≥ 25 a constellation of tiny gem
+    // motes circles the orb on multiple rings, each rotating at a different
+    // rate. Cheap (12 dots total), but visually unmistakable as "you've
+    // crossed into a higher tier of play".
+    if (combo >= 25 && !feverActive) {
+      const acx = player.x + player.w / 2;
+      const acy = player.y + player.h / 2;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const ringSpec = [
+        { r: 40, n: 5, sp:  0.06, col: '255,225,74' },
+        { r: 54, n: 4, sp: -0.04, col: '255,61,240' },
+        { r: 68, n: 3, sp:  0.03, col: '25,240,255' }
+      ];
+      for (const sp of ringSpec) {
+        for (let i = 0; i < sp.n; i++) {
+          const ang = frame * sp.sp + (i / sp.n) * Math.PI * 2;
+          const x = acx + Math.cos(ang) * sp.r;
+          const y = acy + Math.sin(ang) * sp.r * 0.55;
+          const g = ctx.createRadialGradient(x, y, 0, x, y, 6);
+          g.addColorStop(0, 'rgba(' + sp.col + ',0.95)');
+          g.addColorStop(1, 'rgba(' + sp.col + ',0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(x - 6, y - 6, 12, 12);
+        }
+      }
+      ctx.restore();
+    }
+
     // OVERDRIVE aura — hue-cycling energy rings pulsing around the orb
     if (feverActive) {
       const hue = (frame * 6) % 360;
@@ -4677,6 +5087,7 @@
                 : p.type === 'shield' ? '25, 240, 255'
                 : p.type === 'phase'  ? '200, 168, 255'
                 : p.type === 'timewarp' ? '120, 230, 255'
+                : p.type === 'starburst' ? '255, 200, 80'
                 : '255, 255, 255';
       g.addColorStop(0, 'rgba(' + col + ', 0.6)');
       g.addColorStop(1, 'rgba(' + col + ', 0)');
@@ -4691,10 +5102,11 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(
-        p.type === 'magnet'   ? '🧲' :
-        p.type === 'shield'   ? '🛡' :
-        p.type === 'phase'    ? '👻' :
-        p.type === 'timewarp' ? '⏱' :
+        p.type === 'magnet'    ? '🧲' :
+        p.type === 'shield'    ? '🛡' :
+        p.type === 'phase'     ? '👻' :
+        p.type === 'timewarp'  ? '⏱' :
+        p.type === 'starburst' ? '★' :
         '⚡',
         px, py + 2);
     }
@@ -4831,6 +5243,73 @@
         ctx.fill();
       }
     }
+  }
+
+  // LASER GRID — pulsing vertical magenta beams. Renders a charging telegraph
+  // 8 frames before the beam goes hot so the player can read & time the pass.
+  // OFF state shows a thin dotted line; ON state shows a full bright pillar
+  // with bloom + scanline shimmer.
+  function drawLasers() {
+    if (!lasers.length) return;
+    ctx.save();
+    for (const ls of lasers) {
+      const ph = (ls.t + ls.phase) % ls.cycle;
+      const onNow = ph < ls.onFrames;
+      const charging = !onNow && (ph >= ls.cycle - 8); // last 8 off-frames = telegraph
+      const y0 = ls.high ? 0 : GROUND - 60;
+      const yH = ls.high ? GROUND - 60 : 60;
+      if (onNow) {
+        // Glow column behind the beam (bloom)
+        ctx.globalCompositeOperation = 'lighter';
+        const glow = ctx.createLinearGradient(ls.x - 28, 0, ls.x + ls.w + 28, 0);
+        glow.addColorStop(0, 'rgba(255,61,240,0)');
+        glow.addColorStop(0.5, 'rgba(255,80,200,0.55)');
+        glow.addColorStop(1, 'rgba(255,61,240,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(ls.x - 28, y0, ls.w + 56, yH);
+        // Beam body — bright white core with magenta edges
+        const body = ctx.createLinearGradient(ls.x, 0, ls.x + ls.w, 0);
+        body.addColorStop(0, 'rgba(255,61,240,0.95)');
+        body.addColorStop(0.5, 'rgba(255,255,255,1)');
+        body.addColorStop(1, 'rgba(255,61,240,0.95)');
+        ctx.fillStyle = body;
+        ctx.fillRect(ls.x, y0, ls.w, yH);
+        // Cap glow at the open end (the hazardous tip)
+        const capY = ls.high ? y0 + yH : y0;
+        const cap = ctx.createRadialGradient(ls.x + ls.w / 2, capY, 0, ls.x + ls.w / 2, capY, 34);
+        cap.addColorStop(0, 'rgba(255,255,255,0.95)');
+        cap.addColorStop(1, 'rgba(255,61,240,0)');
+        ctx.fillStyle = cap;
+        ctx.fillRect(ls.x - 24, capY - 24, ls.w + 48, 48);
+        // Sparking flecks at the cap
+        for (let i = 0; i < 3; i++) {
+          if (Math.random() < 0.5) continue;
+          const sx = ls.x + ls.w / 2 + (Math.random() - 0.5) * 24;
+          const sy = capY + (Math.random() - 0.5) * 10;
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      } else {
+        // OFF — show emitter studs + (if charging) a flickering preview line
+        ctx.fillStyle = '#330020';
+        ctx.fillRect(ls.x, y0, ls.w, 6);
+        ctx.fillRect(ls.x, y0 + yH - 6, ls.w, 6);
+        ctx.strokeStyle = charging
+          ? 'rgba(255,61,240,' + (0.65 * (0.4 + Math.random() * 0.6)) + ')'
+          : 'rgba(255,61,240,0.18)';
+        ctx.lineWidth = charging ? 2.5 : 1.2;
+        ctx.setLineDash(charging ? [3, 4] : [2, 6]);
+        ctx.beginPath();
+        ctx.moveTo(ls.x + ls.w / 2, y0 + 6);
+        ctx.lineTo(ls.x + ls.w / 2, y0 + yH - 6);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    ctx.restore();
   }
 
   function drawTexts() {
@@ -5560,6 +6039,7 @@
     drawRings();
     drawSlamCracks();
     drawObstacles();
+    drawLasers();
     drawMeteors();
     drawSprings();
     drawPlayer();
@@ -5577,6 +6057,7 @@
       else if (setpiece.type === 'tornado') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
       else if (setpiece.type === 'hyperspace') { washRGB = '180, 120, 255'; barRGB = '180,120,255'; }
       else if (setpiece.type === 'nemesis') { washRGB = '255, 40, 80'; barRGB = '255,40,80'; }
+      else if (setpiece.type === 'laser') { washRGB = '255, 61, 240'; barRGB = '255,61,240'; }
       ctx.fillStyle = 'rgba(' + washRGB + ',0.08)';
       ctx.fillRect(0, 0, W, H);
       const prog = 1 - setpiece.t / setpiece.dur;
@@ -5614,6 +6095,45 @@
       ctx.beginPath();
       ctx.arc(player.x + player.w / 2, GROUND - 60, sweepR, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    // STAR BURST wash — a warm gold radial bloom + falling-star sparkles
+    // showering down across the screen so the 4-second 3× window is unmistakable.
+    if (state === STATE.PLAY && burstFrames > 0) {
+      const fade = Math.min(1, burstFrames / 30);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const wg = ctx.createRadialGradient(W / 2, GROUND - 240, W * 0.10, W / 2, GROUND - 240, W * 0.95);
+      wg.addColorStop(0, 'rgba(255,225,120,' + (0.18 * fade) + ')');
+      wg.addColorStop(0.5, 'rgba(255,170,80,' + (0.10 * fade) + ')');
+      wg.addColorStop(1, 'rgba(255,80,180,' + (0.04 * fade) + ')');
+      ctx.fillStyle = wg;
+      ctx.fillRect(0, 0, W, H);
+      // Deterministic sparkle field — cheap, no allocations
+      const sparkN = 14;
+      const elapsed = BURST_DUR - burstFrames;
+      for (let i = 0; i < sparkN; i++) {
+        const seed = i * 1103515245 + 12345;
+        const lane = ((seed >>> 8) % 1000) / 1000;
+        const speedF = 1.4 + ((seed >>> 16) % 100) / 50;
+        const px = ((seed >>> 4) % W);
+        const py = ((elapsed * speedF * 2 + (seed >>> 12)) % (H + 60)) - 30;
+        const a = 0.55 * fade * (0.6 + (Math.sin(elapsed * 0.2 + i) * 0.4));
+        if (a <= 0.05) continue;
+        ctx.fillStyle = 'rgba(255,240,160,' + a + ')';
+        ctx.beginPath();
+        ctx.arc(px, py, 1.6 + (i & 1), 0, Math.PI * 2);
+        ctx.fill();
+        // tail
+        ctx.strokeStyle = 'rgba(255,225,120,' + (a * 0.6) + ')';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + 2, py - 10);
+        ctx.stroke();
+        void lane;
+      }
       ctx.restore();
     }
 
