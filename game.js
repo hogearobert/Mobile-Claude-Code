@@ -2511,6 +2511,13 @@
   function onPointerMove(e) {
     if (!ptrDown || gestureConsumed || state !== STATE.PLAY) return;
     const dy = (e.clientY || 0) - ptrStartY;
+    // Any meaningful movement (any direction) cancels the deferred AIR-DASH —
+    // a swipe is clearly not a tap, regardless of which way it goes. Done with
+    // a much smaller threshold than the slide trigger so even slow swipes get
+    // detected before the dash-defer window expires.
+    if (pendingDash && Math.abs(dy) > 12) {
+      pendingDash = false;
+    }
     if (dy > 30) {
       // Swipe down → slide. Cancel pending hop / pending air-dash so a
       // dive-slam (swipe-down in air) wins over the deferred input.
@@ -2522,6 +2529,15 @@
     }
   }
   function onPointerUp() {
+    // Tap-release: if the finger lifted without any significant movement, the
+    // user clearly intended a tap → commit the deferred AIR-DASH now (instant
+    // feedback, no defer latency).
+    if (pendingDash) {
+      pendingDash = false;
+      if (state === STATE.PLAY && !player.onGround && !player.sliding && !dashUsed) {
+        airDash();
+      }
+    }
     ptrDown = false;
     endSlide();
   }
@@ -3232,9 +3248,11 @@
       pendingJump = false;
       jump();
     }
-    // Same defer logic for AIR-DASH so a swipe-down can convert the 3rd tap
-    // into a dive-slam instead of an unwanted dash.
-    if (pendingDash && frame - pendingDashFrame >= JUMP_DEFER) {
+    // AIR-DASH fallback fire — if the finger stays pressed without moving (no
+    // pointerup, no swipe), commit the dash after a longer window (~166ms).
+    // This is purely a safety net; the common cases (tap-release / swipe) are
+    // handled instantly by onPointerUp / onPointerMove.
+    if (pendingDash && frame - pendingDashFrame >= 10) {
       pendingDash = false;
       // Re-check state — a slide/landing may have invalidated the dash
       if (state === STATE.PLAY && !player.onGround && !player.sliding && !dashUsed) {
