@@ -1806,6 +1806,12 @@
         24, jumpColor, Math.random() * 3 + 1
       );
     }
+    // Quick launch ring at the feet — sells the upward push, scales with the
+    // jump type (regular / double / slide-bounce boost).
+    const ringRGB = slideBoost > 1 ? '255,225,74'
+                  : player.jumps === 1 ? '120,230,255'
+                  :                      '255,80,220';
+    addRing(player.x + player.w / 2, player.y + player.h, slideBoost > 1 ? 60 : 40, ringRGB, 14);
   }
 
   function startGame() {
