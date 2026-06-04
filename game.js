@@ -2511,16 +2511,32 @@
   function onPointerMove(e) {
     if (!ptrDown || gestureConsumed || state !== STATE.PLAY) return;
     const dy = (e.clientY || 0) - ptrStartY;
-    // Any meaningful movement (any direction) cancels the deferred AIR-DASH —
-    // a swipe is clearly not a tap, regardless of which way it goes. Done with
-    // a much smaller threshold than the slide trigger so even slow swipes get
-    // detected before the dash-defer window expires.
-    if (pendingDash && Math.abs(dy) > 12) {
+    // Swipe UP (~20px) — commits the action immediately. Treats swipe-up as a
+    // first-class alternative to tap: on ground = jump, mid-air with jumps
+    // spent = AIR-DASH. So players who prefer swiping over tapping get the
+    // same 3-input progression (jump · double-jump · dash).
+    if (dy < -20) {
+      if (pendingDash) {
+        pendingDash = false;
+        airDash();
+      } else if (pendingJump) {
+        pendingJump = false;
+        jump();
+      } else if (!player.onGround && player.jumps >= player.maxJumps && !dashUsed && !player.sliding) {
+        airDash();
+      } else if (!player.onGround && player.jumps < player.maxJumps) {
+        jump();
+      }
+      gestureConsumed = true;
+      return;
+    }
+    // Swipe DOWN — small downward drift already hints at a dive-slam, so
+    // cancel the deferred AIR-DASH early (well before the 30px slide trigger)
+    // to avoid stealing the gesture.
+    if (pendingDash && dy > 12) {
       pendingDash = false;
     }
     if (dy > 30) {
-      // Swipe down → slide. Cancel pending hop / pending air-dash so a
-      // dive-slam (swipe-down in air) wins over the deferred input.
       pendingJump = false;
       pendingDash = false;
       if (frame - lastJumpFrame <= 9 && player.vy < 0) player.vy = 7;
