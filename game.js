@@ -2505,7 +2505,11 @@
       pendingDash = true;
       pendingDashFrame = frame;
     } else {
-      jump(); // airborne mid-air-jump: double-jump fires instantly
+      // Airborne mid-air-jump: double-jump fires instantly. Mark the gesture
+      // as consumed so a subsequent swipe-up on the same touch doesn't ALSO
+      // fire a dash — the player intended one action (the jump), not two.
+      jump();
+      gestureConsumed = true;
     }
   }
   function onPointerMove(e) {
