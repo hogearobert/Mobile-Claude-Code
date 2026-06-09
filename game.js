@@ -2420,6 +2420,7 @@
     const ss = document.getElementById('shopOverlay'); if (ss) ss.classList.remove('show');
     const mm = document.getElementById('missionsOverlay'); if (mm) mm.classList.remove('show');
     const st = document.getElementById('statsOverlay'); if (st) st.classList.remove('show');
+    const ht = document.getElementById('howtoOverlay'); if (ht) ht.classList.remove('show');
     const bn = document.getElementById('bottomNav'); if (bn) bn.classList.remove('show');
     if (doubleCoinsBtn) { doubleCoinsBtn.disabled = false; doubleCoinsBtn.style.display = ''; }
     reset();
@@ -2879,15 +2880,51 @@
   const titleSubEl = document.getElementById('runTitle');
   function refreshMuteIcon() { if (muteBtn) muteBtn.textContent = audio.isMuted() ? '🔇' : '🔊'; }
   refreshMuteIcon();
+  // Home-screen audio chips — independent SFX / music switches; the in-game
+  // muteBtn stays a master kill-switch for both.
+  const sfxToggleEl = document.getElementById('sfxToggle');
+  const musicToggleEl = document.getElementById('musicToggle');
+  function refreshAudioChips() {
+    if (sfxToggleEl) sfxToggleEl.classList.toggle('off', audio.isMuted());
+    if (musicToggleEl) musicToggleEl.classList.toggle('off', music.isMuted());
+  }
+  refreshAudioChips();
+  if (sfxToggleEl) sfxToggleEl.addEventListener('click', () => {
+    audio.resume();
+    audio.toggle();
+    refreshMuteIcon();
+    refreshAudioChips();
+  });
+  if (musicToggleEl) musicToggleEl.addEventListener('click', () => {
+    audio.resume();
+    music.toggle();
+    refreshAudioChips();
+  });
   if (muteBtn) muteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     audio.resume();
     const m = audio.toggle();
     music.setMuted(m);
     refreshMuteIcon();
+    refreshAudioChips();
   });
-  // Apply persisted mute to music engine at boot
-  music.setMuted(audio.isMuted());
+  // Boot: only FORCE music off when global SFX mute is on — never unmute it,
+  // so an independently saved music-off preference survives reloads.
+  if (audio.isMuted()) music.setMuted(true);
+  // How-to-play screen
+  const howtoBtn = document.getElementById('howtoBtn');
+  const howtoOverlay = document.getElementById('howtoOverlay');
+  if (howtoBtn && howtoOverlay) {
+    howtoBtn.addEventListener('click', () => {
+      audio.resume();
+      howtoOverlay.classList.add('show');
+    });
+    const hc = document.getElementById('howtoClose');
+    if (hc) hc.addEventListener('click', () => {
+      howtoOverlay.classList.remove('show');
+      showScreen('home');
+    });
+  }
   if (pauseBtn) pauseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; music.pause(); }

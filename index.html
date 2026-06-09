@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=146" />
+  <link rel="stylesheet" href="style.css?v=147" />
 </head>
 <body>
   <div id="app">
@@ -79,6 +79,11 @@
         <div class="btn-stack">
           <button id="startBtn" class="btn primary-cta">JOACĂ</button>
           <button id="dailyBtn" class="btn secondary daily">⚡ DAILY CHALLENGE</button>
+        </div>
+        <div class="settings-row">
+          <button id="sfxToggle" class="chip-toggle" aria-label="Sunete">🔊 Sunete</button>
+          <button id="musicToggle" class="chip-toggle" aria-label="Muzică">🎵 Muzică</button>
+          <button id="howtoBtn" class="chip-toggle" aria-label="Ghid">❓ Ghid</button>
         </div>
         <p class="hint">Funcționează offline. Adaugă pe ecran principal pentru experiență full-screen.</p>
       </div>
@@ -193,6 +198,30 @@
       </div>
     </div>
 
+    <!-- ===== How to play ===== -->
+    <div id="howtoOverlay" class="overlay screen">
+      <div class="panel wide">
+        <div class="screen-head">
+          <h2 class="screen-title">CUM SE JOACĂ</h2>
+          <button id="howtoClose" class="ctrl" aria-label="Închide">✕</button>
+        </div>
+        <div class="howto-list">
+          <div class="howto-item"><span class="hi-icon">👆</span><div><b>Tap</b><span>Sari peste obstacole</span></div></div>
+          <div class="howto-item"><span class="hi-icon">👆👆</span><div><b>Tap dublu</b><span>Salt dublu în aer</span></div></div>
+          <div class="howto-item"><span class="hi-icon">⚡</span><div><b>Al 3-lea tap în aer</b><span>AIR-DASH — țâșnești înainte și spargi țepi/blocuri</span></div></div>
+          <div class="howto-item"><span class="hi-icon">✋</span><div><b>Ține apăsat la salt</b><span>Salt mai înalt (charge jump)</span></div></div>
+          <div class="howto-item"><span class="hi-icon">👇</span><div><b>Swipe jos</b><span>Alunecă pe sub obstacolele portocalii</span></div></div>
+          <div class="howto-item"><span class="hi-icon">💥</span><div><b>Swipe jos în aer</b><span>Dive-Slam — undă de șoc care sparge obstacolele din jur</span></div></div>
+          <div class="howto-item"><span class="hi-icon">🚀</span><div><b>Salt din alunecare</b><span>Slide-bounce — lansare mai înaltă</span></div></div>
+          <h3 class="sub-title">SFATURI</h3>
+          <div class="howto-item"><span class="hi-icon">💀</span><div><b>Near-miss</b><span>Trece razant pe lângă pericole pentru bonus + OVERDRIVE</span></div></div>
+          <div class="howto-item"><span class="hi-icon">🔥</span><div><b>OVERDRIVE</b><span>Umple bara → scor ×3. Continuă să o umpli → MEGA ×5!</span></div></div>
+          <div class="howto-item"><span class="hi-icon">💎</span><div><b>Geme rare</b><span>Albastru = ×5 stele · Roșu = ×10 JACKPOT</span></div></div>
+          <div class="howto-item"><span class="hi-icon">🏁</span><div><b>Record Gate</b><span>Steagul auriu marchează unde a murit cel mai bun run al tău</span></div></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== Bottom navigation ===== -->
     <nav id="bottomNav" class="bottom-nav" aria-label="Meniu">
       <button class="nav-btn active" data-screen="home" aria-label="Acasă">
@@ -213,7 +242,7 @@
 
   </div>
 
-  <script src="game.js?v=146"></script>
+  <script src="game.js?v=147"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT
