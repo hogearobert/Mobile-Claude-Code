@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" />
+  <!-- frame-ancestors omitted: it is ignored (with a console error) when set
+       via <meta>; it only takes effect as an HTTP header. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="referrer" content="no-referrer" />
   <meta name="theme-color" content="#07091a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,7 +15,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=144" />
+  <link rel="stylesheet" href="style.css?v=145" />
 </head>
 <body>
   <div id="app">
@@ -184,6 +186,8 @@
           <div class="stat-box"><span class="stat-num" id="sPhase">0</span><span class="stat-lbl">Phase-uri</span></div>
           <div class="stat-box"><span class="stat-num" id="sDash">0</span><span class="stat-lbl">Dash-uri</span></div>
         </div>
+        <h3 class="sub-title">TOP 5 RUNS</h3>
+        <ol id="topRunsList" class="top-runs"></ol>
         <h3 class="sub-title">TROFEE</h3>
         <div id="achList" class="ach-list"></div>
       </div>
@@ -209,7 +213,7 @@
 
   </div>
 
-  <script src="game.js?v=144"></script>
+  <script src="game.js?v=145"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

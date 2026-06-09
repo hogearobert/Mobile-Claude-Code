@@ -1901,6 +1901,20 @@
     const sSlam = document.getElementById('sSlam'); if (sSlam) sSlam.textContent = lifeSlams;
     const sPhase = document.getElementById('sPhase'); if (sPhase) sPhase.textContent = lifePhases;
     const sDash = document.getElementById('sDash'); if (sDash) sDash.textContent = lifeDashes;
+    // Personal Top-5 leaderboard
+    {
+      const ol = document.getElementById('topRunsList');
+      if (ol) {
+        let top = [];
+        try { top = JSON.parse(readLS(NS + 'topRuns', '[]')) || []; } catch (_) { top = []; }
+        const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
+        ol.innerHTML = top.length
+          ? top.map((r, i) =>
+              '<li><span class="tr-rank">' + medals[i] + '</span><span class="tr-score">' + r.s + '</span><span class="tr-date">' + r.d + '</span></li>'
+            ).join('')
+          : '<li class="tr-empty">Joacă un run pentru a apărea aici!</li>';
+      }
+    }
     // Pilot rank banner — current rank + progress to the next
     {
       const cur = pilotRank;
@@ -2480,6 +2494,16 @@
         finalScoreEl.textContent = cur;
         if (t >= 1) { clearInterval(finalScoreEl._timer); finalScoreEl.textContent = total; }
       }, 32);
+    }
+    // Personal Top-5 leaderboard — keep the five best (score, date) runs.
+    // Daily-mode runs excluded so the board reflects the standard mode.
+    if (!dailyMode && score > 0) {
+      let top = [];
+      try { top = JSON.parse(readLS(NS + 'topRuns', '[]')) || []; } catch (_) { top = []; }
+      top.push({ s: score, d: todayStr() });
+      top.sort((a, b) => b.s - a.s);
+      top = top.slice(0, 5);
+      writeLS(NS + 'topRuns', JSON.stringify(top));
     }
     // Track death score for dynamic difficulty
     deathScores.push(score);
