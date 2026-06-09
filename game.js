@@ -24,6 +24,54 @@
   const BLOOM_SCALE = 0.25;   // bloom buffer = 1/4 of canvas in each axis
   const BLOOM_BLUR = 4;       // blur radius in bloom-buffer pixels
 
+  // ---------- Cached CRT overlay (scanlines + vignette) ----------
+  // Both are static for a given canvas size, so they're baked once per resize
+  // into an offscreen canvas and composited with a single drawImage — instead
+  // of ~200 fillRect calls + a rebuilt radial gradient every frame.
+  const crtCanvas = document.createElement('canvas');
+  const crtCtx = crtCanvas.getContext('2d');
+  function buildCrtOverlay() {
+    const cw = canvas.width, ch = canvas.height;
+    if (cw < 2 || ch < 2) return;
+    crtCanvas.width = cw;
+    crtCanvas.height = ch;
+    crtCtx.clearRect(0, 0, cw, ch);
+    // Scanlines — one ~1-logical-px stripe every 4 logical px. Baked as
+    // translucent darkening (visually equivalent to the old multiply pass).
+    const scale = cw / W;
+    const step = 4 * scale;
+    const lineH = Math.max(1, Math.round(scale));
+    crtCtx.fillStyle = 'rgba(8, 10, 25, 0.16)';
+    for (let y = 0; y < ch; y += step) crtCtx.fillRect(0, Math.round(y), cw, lineH);
+    // Vignette — same stops as the old per-frame gradient
+    const vg = crtCtx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.30, cw / 2, ch / 2, Math.max(cw, ch) * 0.78);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(0.65, 'rgba(0,0,0,0.18)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    crtCtx.fillStyle = vg;
+    crtCtx.fillRect(0, 0, cw, ch);
+  }
+
+  // ---------- Adaptive performance mode ----------
+  // Rolling frame-time average measured in the rAF loop. Sustained slow
+  // frames (>26ms avg) switch perfMode on: bloom is skipped (the single most
+  // expensive pass on weak GPUs / software rendering). Recovers with
+  // hysteresis when frames are consistently fast again.
+  let perfMode = false;
+  let perfAvgMs = 16.7;       // exponential moving average of frame delta
+  let perfModeFrames = 0;     // frames since last mode flip (hysteresis)
+  function perfTrack(dt) {
+    perfAvgMs += (dt - perfAvgMs) * 0.05;
+    perfModeFrames++;
+    if (!perfMode && perfAvgMs > 26 && perfModeFrames > 90) {
+      perfMode = true;
+      perfModeFrames = 0;
+    } else if (perfMode && perfAvgMs < 18 && perfModeFrames > 240) {
+      perfMode = false;
+      perfModeFrames = 0;
+    }
+  }
+
   // ---------- Audio (procedural Web Audio, no asset files) ----------
   const audio = (() => {
     let ac, master;
@@ -452,6 +500,7 @@
     bloomCanvas.height = Math.max(2, Math.round(canvas.height * BLOOM_SCALE));
     const scale = (vw / W) * DPR;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    buildCrtOverlay();
     try {
       if (state !== STATE.PLAY && player) {
         player.y = GROUND - player.h;
@@ -4743,11 +4792,16 @@
       const len = 40 + (seed % 90);
       const x = W - ((scrollX * (2.2 + (seed % 5) * 0.4) + seed * 9) % (W + 160));
       const a = intensity * (0.10 + (seed % 4) * 0.04);
-      const g = ctx.createLinearGradient(x, y, x + len, y);
-      g.addColorStop(0, 'rgba(255,255,255,0)');
-      g.addColorStop(0.5, 'rgba(' + palette.accent + ',' + a + ')');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g;
+      if (perfMode) {
+        // Flat fill — skips a per-line gradient allocation on slow devices
+        ctx.fillStyle = 'rgba(' + palette.accent + ',' + (a * 0.7).toFixed(3) + ')';
+      } else {
+        const g = ctx.createLinearGradient(x, y, x + len, y);
+        g.addColorStop(0, 'rgba(255,255,255,0)');
+        g.addColorStop(0.5, 'rgba(' + palette.accent + ',' + a + ')');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+      }
       ctx.fillRect(x, y, len, 1.5);
     }
     ctx.restore();
@@ -6526,7 +6580,7 @@
   // Additively blend the blurred quarter-res frame back over the scene so every
   // bright neon source blooms. Strength swells hard during OVERDRIVE.
   function applyBloom() {
-    if (!bloomOK) return;
+    if (!bloomOK || perfMode) return; // skipped on slow devices (adaptive)
     const bw = bloomCanvas.width, bh = bloomCanvas.height;
     if (bw < 2 || bh < 2) return;
     try {
@@ -6762,21 +6816,13 @@
 
     // Subtle CRT scanlines + corner vignette — synthwave authenticity layer.
     // Drawn AFTER bloom + heat wash so it sits on top without being blown out.
-    // Kept very low alpha so it never fights gameplay readability.
+    // Baked once per resize into crtCanvas → composited with one drawImage
+    // (was ~200 fillRects + a fresh radial gradient per frame).
     if (state === STATE.PLAY || state === STATE.PAUSED) {
       ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
-      // 2px stripes spaced every 4px (cheap: stride loop, not a pattern)
-      ctx.fillStyle = 'rgba(40, 50, 90, 0.18)';
-      for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(crtCanvas, 0, 0);
       ctx.restore();
-      // Soft vignette — radial darken at the edges
-      const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.30, W / 2, H / 2, Math.max(W, H) * 0.78);
-      vg.addColorStop(0, 'rgba(0,0,0,0)');
-      vg.addColorStop(0.65, 'rgba(0,0,0,0.18)');
-      vg.addColorStop(1, 'rgba(0,0,0,0.55)');
-      ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, W, H);
     }
 
     // Full-screen white flash (level up / shield save / revive)
@@ -6883,6 +6929,7 @@
       let dt = now - last;
       last = now;
       if (dt > 250) dt = 250;
+      perfTrack(dt);
       accumulator += dt;
       let steps = 0;
       while (accumulator >= FIXED_DT && steps < 5) {
