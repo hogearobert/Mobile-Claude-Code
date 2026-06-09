@@ -634,6 +634,12 @@
   let runAirBonus = 0;
   let runXpBanked = 0; // XP already credited this run (prevents double-count on revive)
   let recordBrokenThisRun = false;
+  // RECORD GATE — a golden flag planted in the world at the exact distance the
+  // best run died. Seeing it physically approach is a stronger "one more run"
+  // pull than any number in the HUD. Spawned ~2s before the spot.
+  let bestDist = parseInt(readLS(NS + 'bestDist', '0'), 10) || 0;
+  let recordGate = null;        // { x } scrolling world object, null when absent
+  let recordGateSpawned = false;
   let nextScoreMilestone = 2500; // next big-score celebration threshold
 
   // ---------- Levels (palette + difficulty) ----------
@@ -2237,6 +2243,8 @@
     runAirBonus = 0;
     runXpBanked = 0;
     recordBrokenThisRun = false;
+    recordGate = null;
+    recordGateSpawned = false;
     nextScoreMilestone = 2500;
     levelIdx = 0;
     palette = LEVELS[0];
@@ -2415,6 +2423,10 @@
         writeLS(SK.best, best);
         bestEl.textContent = best;
         newRecord = true;
+        // Remember WHERE (distance) this record-setting run ended, so next
+        // run can plant the RECORD GATE flag at that exact spot in the world.
+        bestDist = Math.floor(dist);
+        writeLS(NS + 'bestDist', bestDist);
         if (prevBest > 0) goalMsg = '+' + (score - prevBest) + ' peste recordul anterior!';
       } else if (best > 0) {
         const diff = best - score;
@@ -4134,6 +4146,30 @@
 
     // dist drives all pacing (level / speed / spawns) — steady, coin-independent.
     dist += 1;
+    // RECORD GATE — plant the flag ~2s before the distance where the best run
+    // died, so the player watches their old limit physically arrive & fall.
+    if (!recordGateSpawned && !dailyMode && bestDist > 300 && dist >= bestDist - 130) {
+      recordGateSpawned = true;
+      recordGate = { x: W + 60, crossed: false };
+    }
+    if (recordGate) {
+      recordGate.x -= wSpeed;
+      const gpx = player.x + player.w / 2;
+      if (!recordGate.crossed && recordGate.x < gpx) {
+        recordGate.crossed = true;
+        // Crossing the flag = beating your best DISTANCE — its own beat,
+        // separate from the score-record celebration (which may differ).
+        popText('🏁 AI TRECUT DE VECHIUL TĂU FINAL!', W / 2, GROUND - 250, '#ffe14a', 1.5);
+        addRing(gpx, player.y + player.h / 2, 200, '255,225,74', 38);
+        flashFrame = frame;
+        shake = Math.max(shake, 8);
+        zoomPunch = Math.max(zoomPunch, 0.06);
+        addFever(0.20);
+        audio.levelup && audio.levelup();
+        if (navigator.vibrate) { try { navigator.vibrate([20, 40, 120]); } catch (_) {} }
+      }
+      if (recordGate.x < -80) recordGate = null;
+    }
     // Passive score climbs with depth: +1 at L1 up to +2.1 at L12 (feels like ascent)
     score += (1 + levelIdx * 0.1) * feverScoreMult() * sprintMult() * burstMult();
     tryLevelUp();
@@ -5515,6 +5551,60 @@
     }
   }
 
+  // RECORD GATE — golden flag pole planted where the best run ended. Bright,
+  // celebratory, unmissable: pulsing beam + waving pennant + RECORD label.
+  // Dims after the player crosses it (the moment has passed).
+  function drawRecordGate() {
+    if (!recordGate) return;
+    const gx = recordGate.x;
+    const topY = GROUND - 250;
+    const dim = recordGate.crossed ? 0.35 : 1;
+    ctx.save();
+    // Light beam rising from the base
+    ctx.globalCompositeOperation = 'lighter';
+    const beam = ctx.createLinearGradient(0, GROUND, 0, topY);
+    beam.addColorStop(0, 'rgba(255,225,74,' + (0.45 * dim) + ')');
+    beam.addColorStop(1, 'rgba(255,225,74,0)');
+    ctx.fillStyle = beam;
+    const bw = 26 + Math.sin(frame * 0.12) * 5;
+    ctx.fillRect(gx - bw / 2, topY, bw, GROUND - topY);
+    ctx.globalCompositeOperation = 'source-over';
+    // Pole
+    ctx.strokeStyle = 'rgba(255,235,160,' + (0.9 * dim) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(gx, GROUND);
+    ctx.lineTo(gx, topY);
+    ctx.stroke();
+    // Waving pennant — triangle flapping on a sine
+    const wave = Math.sin(frame * 0.15) * 6;
+    ctx.fillStyle = 'rgba(255,225,74,' + (0.95 * dim) + ')';
+    ctx.beginPath();
+    ctx.moveTo(gx, topY);
+    ctx.lineTo(gx + 56, topY + 14 + wave);
+    ctx.lineTo(gx, topY + 30);
+    ctx.closePath();
+    ctx.fill();
+    // Trophy + label above the pole
+    ctx.globalAlpha = dim;
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#ffe14a';
+    ctx.fillText('🏆 RECORD', gx, topY - 8);
+    ctx.globalAlpha = 1;
+    // Base glow pool on the ground
+    ctx.globalCompositeOperation = 'lighter';
+    const pool = ctx.createRadialGradient(gx, GROUND, 0, gx, GROUND, 50);
+    pool.addColorStop(0, 'rgba(255,225,74,' + (0.5 * dim) + ')');
+    pool.addColorStop(1, 'rgba(255,225,74,0)');
+    ctx.fillStyle = pool;
+    ctx.beginPath();
+    ctx.ellipse(gx, GROUND, 50, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   // LASER GRID — pulsing vertical magenta beams. Renders a charging telegraph
   // 8 frames before the beam goes hot so the player can read & time the pass.
   // OFF state shows a thin dotted line; ON state shows a full bright pillar
@@ -6366,6 +6456,7 @@
       ctx.restore();
     }
 
+    drawRecordGate();
     drawObstacles();
     drawLasers();
     drawMeteors();
