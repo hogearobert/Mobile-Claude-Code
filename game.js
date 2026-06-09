@@ -692,25 +692,29 @@
   let nextScoreMilestone = 2500; // next big-score celebration threshold
 
   // ---------- Levels (palette + difficulty) ----------
+  // `scenery` picks the mid-parallax silhouette set: city (neon towers),
+  // forest (canopy trees), crystal (ice shards), volcano (glowing cones),
+  // asteroid (floating rocks). Same scroll data, different shapes — so each
+  // biome reads as a different WORLD, not just a recolour.
   const LEVELS = [
-    { name: 'ORIGIN',   sky: ['#0a0e2a', '#1a0a2e', '#2a0a3a'], sun: '#ff3df0', sunRGB: '255,80,200',  mountainHue: 280, accent: '25,240,255',  ground: '#06081a', weather: 'none' },
-    { name: 'INFERNO',  sky: ['#1a0612', '#3d0a1f', '#5a0f2a'], sun: '#ff7a3d', sunRGB: '255,150,80',  mountainHue: 20,  accent: '255,180,80',  ground: '#1a0612', weather: 'embers' },
-    { name: 'VERDANT',  sky: ['#06140a', '#0a3d1f', '#0a5a2a'], sun: '#3dff7a', sunRGB: '100,255,160', mountainHue: 130, accent: '120,255,180', ground: '#06140a', weather: 'leaves' },
-    { name: 'GLACIAL',  sky: ['#06141f', '#0a2a3d', '#0a3d52'], sun: '#3df0ff', sunRGB: '100,230,255', mountainHue: 200, accent: '120,200,255', ground: '#06141f', weather: 'snow' },
-    { name: 'CRIMSON',  sky: ['#1a0608', '#3d0a14', '#5a0a14'], sun: '#ff0a3d', sunRGB: '255,60,90',   mountainHue: 350, accent: '255,80,80',   ground: '#1a0608', weather: 'rain' },
-    { name: 'SOLAR',    sky: ['#1a1408', '#3d2e0f', '#5a4a0a'], sun: '#ffe14a', sunRGB: '255,225,100', mountainHue: 45,  accent: '255,225,100', ground: '#1a1408', weather: 'dust' },
-    { name: 'NEBULA',   sky: ['#0a0420', '#1c0a40', '#2e0a55'], sun: '#b478ff', sunRGB: '180,120,255', mountainHue: 270, accent: '180,130,255', ground: '#0a0420', weather: 'dust' },
-    { name: 'ACID',     sky: ['#0a1505', '#163d0a', '#1f5a0a'], sun: '#c8ff3d', sunRGB: '200,255,80',  mountainHue: 80,  accent: '200,255,90',  ground: '#0a1505', weather: 'rain' },
-    { name: 'MIDNIGHT', sky: ['#020512', '#060f2e', '#0a1640'], sun: '#7da8ff', sunRGB: '125,168,255', mountainHue: 230, accent: '140,170,255', ground: '#020512', weather: 'snow' },
-    { name: 'MAGMA',    sky: ['#160404', '#3d0a06', '#5a1404'], sun: '#ff5a14', sunRGB: '255,100,30',  mountainHue: 12,  accent: '255,120,40',  ground: '#160404', weather: 'embers' },
-    { name: 'AURORA',   sky: ['#04140f', '#0a3d3a', '#0a3d52'], sun: '#3dffd0', sunRGB: '100,255,210', mountainHue: 165, accent: '120,255,220', ground: '#04140f', weather: 'snow' },
-    { name: 'ULTRA',    sky: ['#1a0a1a', '#3d0a3d', '#52145a'], sun: '#ff3df0', sunRGB: '255,80,240',  mountainHue: 300, accent: '255,120,255', ground: '#1a0a1a', weather: 'leaves' },
+    { name: 'ORIGIN',   sky: ['#0a0e2a', '#1a0a2e', '#2a0a3a'], sun: '#ff3df0', sunRGB: '255,80,200',  mountainHue: 280, accent: '25,240,255',  ground: '#06081a', weather: 'none',   scenery: 'city' },
+    { name: 'INFERNO',  sky: ['#1a0612', '#3d0a1f', '#5a0f2a'], sun: '#ff7a3d', sunRGB: '255,150,80',  mountainHue: 20,  accent: '255,180,80',  ground: '#1a0612', weather: 'embers', scenery: 'volcano' },
+    { name: 'VERDANT',  sky: ['#06140a', '#0a3d1f', '#0a5a2a'], sun: '#3dff7a', sunRGB: '100,255,160', mountainHue: 130, accent: '120,255,180', ground: '#06140a', weather: 'leaves', scenery: 'forest' },
+    { name: 'GLACIAL',  sky: ['#06141f', '#0a2a3d', '#0a3d52'], sun: '#3df0ff', sunRGB: '100,230,255', mountainHue: 200, accent: '120,200,255', ground: '#06141f', weather: 'snow',   scenery: 'crystal' },
+    { name: 'CRIMSON',  sky: ['#1a0608', '#3d0a14', '#5a0a14'], sun: '#ff0a3d', sunRGB: '255,60,90',   mountainHue: 350, accent: '255,80,80',   ground: '#1a0608', weather: 'rain',   scenery: 'volcano' },
+    { name: 'SOLAR',    sky: ['#1a1408', '#3d2e0f', '#5a4a0a'], sun: '#ffe14a', sunRGB: '255,225,100', mountainHue: 45,  accent: '255,225,100', ground: '#1a1408', weather: 'dust',   scenery: 'city' },
+    { name: 'NEBULA',   sky: ['#0a0420', '#1c0a40', '#2e0a55'], sun: '#b478ff', sunRGB: '180,120,255', mountainHue: 270, accent: '180,130,255', ground: '#0a0420', weather: 'dust',   scenery: 'asteroid' },
+    { name: 'ACID',     sky: ['#0a1505', '#163d0a', '#1f5a0a'], sun: '#c8ff3d', sunRGB: '200,255,80',  mountainHue: 80,  accent: '200,255,90',  ground: '#0a1505', weather: 'rain',   scenery: 'forest' },
+    { name: 'MIDNIGHT', sky: ['#020512', '#060f2e', '#0a1640'], sun: '#7da8ff', sunRGB: '125,168,255', mountainHue: 230, accent: '140,170,255', ground: '#020512', weather: 'snow',   scenery: 'city' },
+    { name: 'MAGMA',    sky: ['#160404', '#3d0a06', '#5a1404'], sun: '#ff5a14', sunRGB: '255,100,30',  mountainHue: 12,  accent: '255,120,40',  ground: '#160404', weather: 'embers', scenery: 'volcano' },
+    { name: 'AURORA',   sky: ['#04140f', '#0a3d3a', '#0a3d52'], sun: '#3dffd0', sunRGB: '100,255,210', mountainHue: 165, accent: '120,255,220', ground: '#04140f', weather: 'snow',   scenery: 'crystal' },
+    { name: 'ULTRA',    sky: ['#1a0a1a', '#3d0a3d', '#52145a'], sun: '#ff3df0', sunRGB: '255,80,240',  mountainHue: 300, accent: '255,120,255', ground: '#1a0a1a', weather: 'leaves', scenery: 'city' },
     // PRISM — endgame rainbow biome, palette is a placeholder; the actual sky
     // hue cycles every frame inside drawBackground for a living spectrum effect.
-    { name: 'PRISM',    sky: ['#0a0418', '#1a063a', '#3a0a52'], sun: '#ffffff', sunRGB: '255,255,255', mountainHue: 0,   accent: '255,255,255', ground: '#0a0418', weather: 'none', prism: true },
+    { name: 'PRISM',    sky: ['#0a0418', '#1a063a', '#3a0a52'], sun: '#ffffff', sunRGB: '255,255,255', mountainHue: 0,   accent: '255,255,255', ground: '#0a0418', weather: 'none', prism: true, scenery: 'crystal' },
     // VOID — true endless cap biome: deep black with shifting violet/cyan stars
     // and a black-sun (event horizon) effect, drawn in drawBackground.
-    { name: 'VOID',     sky: ['#000004', '#04000c', '#0a0214'], sun: '#7a3dff', sunRGB: '120,80,220',  mountainHue: 270, accent: '160,120,255', ground: '#000004', weather: 'none', void: true }
+    { name: 'VOID',     sky: ['#000004', '#04000c', '#0a0214'], sun: '#7a3dff', sunRGB: '120,80,220',  mountainHue: 270, accent: '160,120,255', ground: '#000004', weather: 'none', void: true, scenery: 'asteroid' }
   ];
   const LEVEL_SCORE = 500;
   let levelIdx = 0;
@@ -4779,39 +4783,159 @@
       ctx.stroke();
     }
 
-    // Buildings (closer parallax)
-    for (const b of buildings) {
-      ctx.fillStyle = palette.ground;
-      ctx.fillRect(b.x, GROUND - b.h, b.w, b.h);
-      ctx.strokeStyle = 'rgba(' + palette.accent + ', 0.4)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(b.x + 0.5, GROUND - b.h + 0.5, b.w - 1, b.h - 1);
-      if (b.windows) {
-        // Window grid with a STABLE per-window seed (independent of b.x, which
-        // shifts every frame as the city scrolls). Hashes the per-building
-        // seed with the local row/col index so each window stays the same
-        // colour/tone, with a slow flicker tick toggling a few at a time.
-        const flickerTick = Math.floor(frame / 18);
-        let row = 0;
-        for (let wy = GROUND - b.h + 12; wy < GROUND - 20; wy += 14) {
-          let col = 0;
-          for (let wx = b.x + 6; wx < b.x + b.w - 6; wx += 12) {
-            const seed = ((b.seed ^ (col * 73856093) ^ (row * 19349663)) >>> 0);
-            col++;
-            if (seed % 100 < 55) continue; // ~55% dark walls, 45% lit windows
-            // Slow flicker: a small fraction toggles each tick
-            if (((seed ^ flickerTick) % 47) < 4) continue;
-            // Warm yellow vs cool cyan vs hot pink (rare) — biome-agnostic city
-            const tone = seed % 100;
-            const cl = tone < 70 ? '255, 225, 74'
-                     : tone < 92 ? '120, 230, 255'
-                     :             '255, 80, 220';
-            const a = 0.45 + ((seed >> 4) % 30) / 100; // 0.45..0.75
-            ctx.fillStyle = 'rgba(' + cl + ',' + a + ')';
-            ctx.fillRect(wx, wy, 5, 6);
+    // Mid-parallax silhouettes — shape set picked by palette.scenery so each
+    // biome reads as a different WORLD. All variants reuse the same scrolling
+    // `buildings` array (x, w, h, seed), only the rendering differs.
+    const scenery = palette.scenery || 'city';
+    if (scenery === 'city') {
+      for (const b of buildings) {
+        ctx.fillStyle = palette.ground;
+        ctx.fillRect(b.x, GROUND - b.h, b.w, b.h);
+        ctx.strokeStyle = 'rgba(' + palette.accent + ', 0.4)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(b.x + 0.5, GROUND - b.h + 0.5, b.w - 1, b.h - 1);
+        if (b.windows) {
+          // Window grid with a STABLE per-window seed (independent of b.x,
+          // which shifts every frame as the city scrolls). Hashes the
+          // per-building seed with the local row/col index so each window
+          // stays the same colour/tone, with a slow flicker tick.
+          const flickerTick = Math.floor(frame / 18);
+          let row = 0;
+          for (let wy = GROUND - b.h + 12; wy < GROUND - 20; wy += 14) {
+            let col = 0;
+            for (let wx = b.x + 6; wx < b.x + b.w - 6; wx += 12) {
+              const seed = ((b.seed ^ (col * 73856093) ^ (row * 19349663)) >>> 0);
+              col++;
+              if (seed % 100 < 55) continue; // ~55% dark walls, 45% lit windows
+              if (((seed ^ flickerTick) % 47) < 4) continue;
+              const tone = seed % 100;
+              const cl = tone < 70 ? '255, 225, 74'
+                       : tone < 92 ? '120, 230, 255'
+                       :             '255, 80, 220';
+              const a = 0.45 + ((seed >> 4) % 30) / 100; // 0.45..0.75
+              ctx.fillStyle = 'rgba(' + cl + ',' + a + ')';
+              ctx.fillRect(wx, wy, 5, 6);
+            }
+            row++;
           }
-          row++;
         }
+      }
+    } else if (scenery === 'forest') {
+      // Giant canopy trees — trunk + 3 stacked foliage triangles. Gentle
+      // per-tree sway driven by the seed so the forest feels alive.
+      for (const b of buildings) {
+        const cx2 = b.x + b.w / 2;
+        const sway = Math.sin(frame * 0.01 + (b.seed % 7)) * 3;
+        const trunkW = Math.max(6, b.w * 0.14);
+        ctx.fillStyle = palette.ground;
+        ctx.fillRect(cx2 - trunkW / 2, GROUND - b.h * 0.45, trunkW, b.h * 0.45);
+        for (let t = 0; t < 3; t++) {
+          const ty = GROUND - b.h * (0.35 + t * 0.22);
+          const tw = b.w * (1 - t * 0.24);
+          ctx.fillStyle = 'rgba(' + palette.accent + ',' + (0.10 + t * 0.05) + ')';
+          ctx.beginPath();
+          ctx.moveTo(cx2 - tw / 2 + sway * t * 0.4, ty);
+          ctx.lineTo(cx2 + sway * (t + 1) * 0.5, ty - b.h * 0.30);
+          ctx.lineTo(cx2 + tw / 2 + sway * t * 0.4, ty);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(' + palette.accent + ',' + (0.30 + t * 0.08) + ')';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+      }
+    } else if (scenery === 'crystal') {
+      // Ice shards — tall tilted kite polygons with a bright lit edge and a
+      // faint inner glint that slow-pulses per shard.
+      for (const b of buildings) {
+        const cx2 = b.x + b.w / 2;
+        const tilt = ((b.seed % 21) - 10) * 0.8;
+        const topX = cx2 + tilt, topY = GROUND - b.h;
+        const midY = GROUND - b.h * 0.42;
+        ctx.fillStyle = 'rgba(' + palette.accent + ',0.10)';
+        ctx.beginPath();
+        ctx.moveTo(topX, topY);
+        ctx.lineTo(cx2 + b.w * 0.38, midY);
+        ctx.lineTo(cx2 + b.w * 0.16, GROUND);
+        ctx.lineTo(cx2 - b.w * 0.16, GROUND);
+        ctx.lineTo(cx2 - b.w * 0.38, midY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(' + palette.accent + ',0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        // Lit edge facing the sun (right side) + inner glint
+        ctx.strokeStyle = 'rgba(255,255,255,0.50)';
+        ctx.beginPath();
+        ctx.moveTo(topX, topY);
+        ctx.lineTo(cx2 + b.w * 0.38, midY);
+        ctx.stroke();
+        const glint = 0.18 + 0.14 * Math.sin(frame * 0.02 + (b.seed % 13));
+        ctx.strokeStyle = 'rgba(255,255,255,' + glint.toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.moveTo(topX, topY);
+        ctx.lineTo(cx2, GROUND - b.h * 0.2);
+        ctx.stroke();
+      }
+    } else if (scenery === 'volcano') {
+      // Volcano cones — wide trapezoids with a glowing crater and a thin
+      // lava streak down the flank. Crater pulse per-cone via seed.
+      for (const b of buildings) {
+        const cx2 = b.x + b.w / 2;
+        const topW = b.w * 0.22;
+        const topY = GROUND - b.h * 0.85;
+        ctx.fillStyle = palette.ground;
+        ctx.beginPath();
+        ctx.moveTo(b.x - b.w * 0.15, GROUND);
+        ctx.lineTo(cx2 - topW / 2, topY);
+        ctx.lineTo(cx2 + topW / 2, topY);
+        ctx.lineTo(b.x + b.w + b.w * 0.15, GROUND);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(' + palette.accent + ',0.35)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        // Glowing crater
+        const pulse = 0.45 + 0.30 * Math.sin(frame * 0.03 + (b.seed % 11));
+        const cg = ctx.createRadialGradient(cx2, topY, 0, cx2, topY, topW);
+        cg.addColorStop(0, 'rgba(' + palette.accent + ',' + (0.7 * pulse).toFixed(3) + ')');
+        cg.addColorStop(1, 'rgba(' + palette.accent + ',0)');
+        ctx.fillStyle = cg;
+        ctx.fillRect(cx2 - topW, topY - topW, topW * 2, topW * 2);
+        // Lava streak down one flank
+        ctx.strokeStyle = 'rgba(' + palette.accent + ',' + (0.5 * pulse).toFixed(3) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx2 + topW * 0.3, topY + 2);
+        ctx.quadraticCurveTo(cx2 + b.w * 0.18, GROUND - b.h * 0.4, cx2 + b.w * 0.30, GROUND);
+        ctx.stroke();
+      }
+    } else if (scenery === 'asteroid') {
+      // Floating rocks — irregular hexagons hovering at altitude (b.h used as
+      // float height), bobbing slowly, with a sun-side rim light.
+      for (const b of buildings) {
+        const r = Math.max(10, b.w * 0.30);
+        const cx2 = b.x + b.w / 2;
+        const cy2 = GROUND - b.h * 0.8 - Math.sin(frame * 0.008 + (b.seed % 17)) * 6;
+        ctx.fillStyle = palette.ground;
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const ang = (k / 6) * Math.PI * 2 + (b.seed % 7) * 0.3;
+          const rr = r * (0.75 + ((b.seed >> (k * 2)) % 5) * 0.10);
+          const px = cx2 + Math.cos(ang) * rr;
+          const py = cy2 + Math.sin(ang) * rr * 0.8;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(' + palette.accent + ',0.40)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        // Rim light on the sun side (upper-right)
+        ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+        ctx.beginPath();
+        ctx.arc(cx2, cy2, r * 0.82, -Math.PI * 0.45, Math.PI * 0.10);
+        ctx.stroke();
       }
     }
   }
