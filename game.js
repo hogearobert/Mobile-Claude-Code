@@ -129,6 +129,14 @@
         setTimeout(() => blip(base * 1.25, 0.10, 'triangle', 0.22), 50);
         setTimeout(() => blip(base * 1.5,  0.14, 'sine',     0.25), 110);
       },
+      dash() {
+        // AIR-DASH whoosh — fast rising sweep + a burst of bright noise.
+        // Distinct from djump (which slides 620→1100): this one is shorter,
+        // sharper and starts higher, reading as "punch through air".
+        blip(900, 0.10, 'sawtooth', 0.18, 1800);
+        noise(0.12, 0.18, 5000);
+        setTimeout(() => blip(1400, 0.06, 'sine', 0.14, 2200), 40);
+      },
       toggle() {
         muted = !muted;
         try { localStorage.setItem('glitchrun.v1.mute', muted ? '1' : '0'); } catch (_) {}
@@ -687,11 +695,14 @@
   // ground contact. Pure skill ceiling — opens new movement routes & rescues.
   let dashFrames = 0;          // remaining frames of dash active (~14)
   let dashCooldown = 0;        // frames until next dash allowed (resets on land)
-  let dashUsed = false;        // one dash per air-arc; reset on landing
+  let dashUsed = false;        // true once the air-arc's dash quota is spent
+  let dashCount = 0;           // dashes fired in the current airborne arc
   let lifeDashes = parseInt(readLS('glitchrun.v1.lifeDashes', '0'), 10) || 0;
   let dashSmashes = 0;         // obstacles shattered this dash (for big-dash trophy)
   const DASH_DUR = 14;
   function isDashing() { return dashFrames > 0; }
+  // Dash quota per airborne arc — VELOCITY skin perk grants a second dash
+  function maxDashes() { return 1 + perkVal('dashplus'); }
   // STAR BURST — instant coin shower + 4s of 3× score on top of normal mults
   let burstFrames = 0;       // 0..240 active window
   const BURST_DUR = 60 * 4;
@@ -701,7 +712,8 @@
     if (player.onGround) return;
     if (dashUsed) return;
     if (frame < inputGraceUntil) return;
-    dashUsed = true;
+    dashCount++;
+    dashUsed = dashCount >= maxDashes();
     dashFrames = DASH_DUR;
     dashSmashes = 0;
     player.vy = -2.5;                                 // tiny upward kick so dash glides flat
@@ -710,8 +722,7 @@
     missionEvent('dash');
     if (!hasAch('dash_first')) unlock('dash_first');
     if (lifeDashes >= 50 && !hasAch('dash_master')) unlock('dash_master');
-    audio.djump && audio.djump();
-    if (audio.power) audio.power();
+    audio.dash ? audio.dash() : (audio.djump && audio.djump());
     if (navigator.vibrate) { try { navigator.vibrate([8, 14, 22]); } catch (_) {} }
     shake = Math.max(shake, 6);
     zoomPunch = Math.max(zoomPunch, 0.045);
@@ -913,6 +924,23 @@
     };
   }
   function rnd() { return dailyMode && dailyRng ? dailyRng() : Math.random(); }
+
+  // ---------- Daily Challenge modifiers (one rotating rule per day) ----------
+  // Same for every player on a given date (seeded by date string), so daily
+  // scores stay comparable. Adds variety + a reason to check in every day.
+  const DAILY_MODS = [
+    { id: 'gems',   icon: '💎', name: 'GEM RUSH',     desc: 'Șansă triplă la geme rare!' },
+    { id: 'lowg',   icon: '🌙', name: 'LOW-G DAY',    desc: 'Gravitație redusă toată ziua!' },
+    { id: 'shield', icon: '🛡', name: 'SCUT START',   desc: 'Începi fiecare run cu scut!' },
+    { id: 'magnet', icon: '🧲', name: 'MAGNET DAY',   desc: 'Începi cu 10s de magnet!' },
+    { id: 'stars',  icon: '★',  name: 'STAR DAY',     desc: '+1 stea la fiecare pickup!' }
+  ];
+  function dailyModFor(dateStr) {
+    let h = 0;
+    for (let i = 0; i < dateStr.length; i++) h = (h * 31 + dateStr.charCodeAt(i)) >>> 0;
+    return DAILY_MODS[h % DAILY_MODS.length];
+  }
+  function activeDailyMod() { return dailyMode ? dailyModFor(todayStr()) : null; }
 
   // Dynamic difficulty: track last 3 deaths' scores, scale spawn rate down if struggling
   let deathScores = [];
@@ -1541,7 +1569,10 @@
     // TEMPO — premium time-warp skin
     { id: 'tempo',   name: 'TEMPO',   cost: 5500, locked: true, animated: true, core:['#fff','#d4f0ff','#19f0ff','#0a4a6e'], halo:['rgba(120,230,255,0.65)','rgba(80,200,255,0.25)'], ring:'rgba(180,240,255,0.85)', trail:'130,230,255', perk:{ type:'timewarp', val:1, label:'+1s la TIME WARP' } },
     // PRISM — rainbow rank-gated endgame trophy skin (rank 8 — long-tail goal)
-    { id: 'prism',   name: 'PRISM',   cost: 0, locked: true, rankReq: 8, animated: true, core:['#fff','#ffe0ff','#ff80c0','#3a0a52'], halo:['rgba(255,180,255,0.65)','rgba(100,200,255,0.25)'], ring:'rgba(255,255,255,0.95)', trail:'255,180,255', perk:{ type:'combo', val:0.20, label:'+20% fereastră combo' } }
+    { id: 'prism',   name: 'PRISM',   cost: 0, locked: true, rankReq: 8, animated: true, core:['#fff','#ffe0ff','#ff80c0','#3a0a52'], halo:['rgba(255,180,255,0.65)','rgba(100,200,255,0.25)'], ring:'rgba(255,255,255,0.95)', trail:'255,180,255', perk:{ type:'combo', val:0.20, label:'+20% fereastră combo' } },
+    // VELOCITY — premium movement-tech skin: a SECOND air-dash per jump arc.
+    // The strongest mobility perk in the game, priced accordingly.
+    { id: 'velocity', name: 'VELOCITY', cost: 8000, locked: true, animated: true, core:['#fff','#d0f8ff','#19d0ff','#083a6e'], halo:['rgba(80,220,255,0.65)','rgba(255,255,255,0.25)'], ring:'rgba(160,240,255,0.9)', trail:'80,220,255', perk:{ type:'dashplus', val:1, label:'+1 AIR-DASH per săritură' } }
   ];
   function perkVal(type) {
     const sk = currentSkin();
@@ -1861,6 +1892,7 @@
     const sCombo = document.getElementById('sCombo'); if (sCombo) sCombo.textContent = bestCombo;
     const sSlam = document.getElementById('sSlam'); if (sSlam) sSlam.textContent = lifeSlams;
     const sPhase = document.getElementById('sPhase'); if (sPhase) sPhase.textContent = lifePhases;
+    const sDash = document.getElementById('sDash'); if (sDash) sDash.textContent = lifeDashes;
     // Pilot rank banner — current rank + progress to the next
     {
       const cur = pilotRank;
@@ -2226,11 +2258,23 @@
     dashFrames = 0;
     dashCooldown = 0;
     dashUsed = false;
+    dashCount = 0;
     dashSmashes = 0;
     burstFrames = 0;
     shieldFlashFrame = -1000;
     invincibleUntil = -1;
     reviveUsed = false;
+    // Daily Challenge modifier — applied AFTER the per-run state resets above
+    // so the rule can't be clobbered (e.g. shieldActive=false would otherwise
+    // wipe the SCUT START mod).
+    {
+      const mod = activeDailyMod();
+      if (mod) {
+        if (mod.id === 'lowg') gravity = BASE_GRAVITY * 0.72;
+        else if (mod.id === 'shield') shieldActive = true;
+        else if (mod.id === 'magnet') magnetFrames = Math.max(magnetFrames, 60 * 10);
+      }
+    }
     feverMeter = 0;
     feverActive = false;
     feverFrames = 0;
@@ -2253,7 +2297,12 @@
     coinsEl.textContent = totalCoins;
     if (levelEl) levelEl.textContent = palette.name;
     setComboUI('');
-    if (titleSubEl) titleSubEl.textContent = dailyMode ? 'DAILY · ' + todayStr() : '';
+    if (titleSubEl) {
+      const mod = activeDailyMod();
+      titleSubEl.textContent = dailyMode
+        ? 'DAILY · ' + todayStr() + (mod ? ' · ' + mod.icon + ' ' + mod.name : '')
+        : '';
+    }
     initParallax();
     initWeather();
   }
@@ -2752,13 +2801,20 @@
     dailyMode = true;
     dailyRng = makeRng('glitchrun-daily-' + todayStr());
     startGame();
+    // Announce today's modifier so the rule is unmissable at run start
+    const mod = activeDailyMod();
+    if (mod) {
+      popText(mod.icon + ' ' + mod.name + ' ' + mod.icon, W / 2, GROUND - 240, '#ffe14a', 1.6);
+      showToast(mod.icon + ' ' + mod.name, mod.desc);
+    }
   });
   // Surface today's daily best directly on the button so players see their bar
   function refreshDailyBtnLabel() {
     if (!dailyBtn) return;
-    dailyBtn.innerHTML = dailyBest > 0
-      ? '⚡ DAILY CHALLENGE<span class="daily-best">Cel mai bun azi: ' + dailyBest + '</span>'
-      : '⚡ DAILY CHALLENGE';
+    const mod = dailyModFor(todayStr());
+    const modTag = '<span class="daily-best">' + mod.icon + ' ' + mod.name +
+      (dailyBest > 0 ? ' · Cel mai bun azi: ' + dailyBest : '') + '</span>';
+    dailyBtn.innerHTML = '⚡ DAILY CHALLENGE' + modTag;
   }
   refreshDailyBtnLabel();
 
@@ -2867,7 +2923,9 @@
   // so the daily challenge stays fully deterministic.
   function rollGem() {
     const r = rnd();
-    const boost = 1 + perkVal('gem'); // SOLAR skin: +50% gem chance
+    let boost = 1 + perkVal('gem'); // SOLAR skin: +50% gem chance
+    const mod = activeDailyMod();
+    if (mod && mod.id === 'gems') boost *= 3; // 💎 GEM RUSH day
     if (r < 0.02 * boost) return 'red';
     if (r < 0.12 * boost) return 'blue';
     return 'star';
@@ -3377,6 +3435,7 @@
       player.rot = 0;
       // Reset air-dash quota each time we touch ground
       dashUsed = false;
+      dashCount = 0;
       dashCooldown = 0;
     } else {
       player.onGround = false;
@@ -3502,9 +3561,27 @@
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
     springs.forEach((s) => { s.x -= wSpeed; s.t += 0.15; if (s.used > 0) s.used--; });
     springs = springs.filter((s) => s.x + s.w > -30);
-    // Lasers scroll with the world; each one's pulse advances independently
+    // Lasers scroll with the world; each one's pulse advances independently.
+    // Threading past an emitter alive pays a small bonus (the laser version
+    // of a near-miss) — bigger if the beam was hot within the last ~15 frames.
     if (lasers.length) {
-      for (const ls of lasers) { ls.x -= wSpeed; ls.t++; }
+      const pcxL = player.x + player.w / 2;
+      for (const ls of lasers) {
+        ls.x -= wSpeed; ls.t++;
+        if (!ls.passed && ls.x + ls.w < pcxL) {
+          ls.passed = true;
+          if (state === STATE.PLAY) {
+            const ph = (ls.t + ls.phase) % ls.cycle;
+            const recentlyHot = ph < ls.onFrames + 15; // just-off window = clutch
+            const gain = (recentlyHot ? 20 : 8) * feverScoreMult();
+            score += gain;
+            addFever(recentlyHot ? 0.06 : 0.03);
+            popText((recentlyHot ? 'LASER THREAD! +' : '+') + gain,
+              pcxL, player.y - 24, recentlyHot ? '#ff3df0' : '#19f0ff', recentlyHot ? 1.15 : 0.9);
+            if (recentlyHot) { audio.nearmiss && audio.nearmiss(); addRing(pcxL, player.y + player.h / 2, 50, '255,61,240', 18); }
+          }
+        }
+      }
       lasers = lasers.filter((ls) => ls.x > -40);
     }
     // Slam cracks scroll + fade
@@ -3835,7 +3912,8 @@
       if (dx * dx + dy * dy < (c.r + pcr + 6) * (c.r + pcr + 6)) {
         c.picked = true;
         const gm = gemMult(c.type);
-        runCoins += ((feverActive ? 2 : 1) + upgLvl('stars') + perkVal('coin')) * gm;
+        const starDay = (activeDailyMod() || {}).id === 'stars' ? 1 : 0; // ★ STAR DAY mod
+        runCoins += ((feverActive ? 2 : 1) + upgLvl('stars') + perkVal('coin') + starDay) * gm;
         missionEvent('coin');
         if (frame - lastCoinFrame < comboWindow()) {
           combo++;
