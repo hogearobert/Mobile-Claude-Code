@@ -2492,8 +2492,34 @@
     runCoins = 0;
     writeLS(SK.coins, totalCoins);
     coinsEl.textContent = totalCoins;
-    awardXP(score - runXpBanked); // only the new portion since any prior revive
+    const xpGained = Math.max(0, score - runXpBanked);
+    awardXP(xpGained);            // only the new portion since any prior revive
     runXpBanked = score;          // so a revived run never double-credits XP
+    // XP row on the game-over panel — gained amount + animated rank progress.
+    // The fill starts at 0 and eases to the current ratio next frame so the
+    // bar visibly grows when the panel appears.
+    {
+      const row = document.getElementById('xpRow');
+      const gl = document.getElementById('xpGainLbl');
+      const rl2 = document.getElementById('xpRankLbl');
+      const xf = document.getElementById('xpFill');
+      if (row && gl && rl2 && xf) {
+        row.style.display = xpGained > 0 ? 'block' : 'none';
+        gl.textContent = '+' + xpGained + ' XP';
+        rl2.textContent = 'NIVEL ' + pilotRank + ' · ' + rankTitle(pilotRank);
+        const base = xpForRank(pilotRank);
+        const span = Math.max(1, xpForRank(pilotRank + 1) - base);
+        const ratio = Math.min(1, Math.max(0, (totalXP - base) / span));
+        xf.style.transition = 'none';
+        xf.style.transform = 'scaleX(0)';
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            xf.style.transition = '';
+            xf.style.transform = 'scaleX(' + ratio.toFixed(4) + ')';
+          });
+        });
+      }
+    }
     finalScoreEl.textContent = score;
     finalBestEl.textContent = best;
     finalCoinsEl.textContent = '+' + earned;

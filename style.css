@@ -688,6 +688,39 @@ html, body {
 }
 .goal-msg:empty { display: none; }
 
+/* XP gained + rank progress on the game-over panel */
+.xp-row {
+  margin: 0 0 14px;
+  padding: 8px 12px 10px;
+  background: rgba(11, 16, 32, 0.55);
+  border: 1px solid rgba(255, 225, 74, 0.25);
+  border-radius: 12px;
+}
+.xp-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+#xpGainLbl { color: var(--neon-yellow); }
+#xpRankLbl { color: var(--text); opacity: 0.75; }
+.xp-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+#xpFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-yellow));
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* ============================================
    Screens (Shop / Missions / Stats) + Bottom Nav
    ============================================ */
