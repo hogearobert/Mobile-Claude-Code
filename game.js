@@ -704,6 +704,7 @@
   let dashUsed = false;        // true once the air-arc's dash quota is spent
   let dashCount = 0;           // dashes fired in the current airborne arc
   let lifeDashes = parseInt(readLS('glitchrun.v1.lifeDashes', '0'), 10) || 0;
+  let lifeCrushers = parseInt(readLS('glitchrun.v1.lifeCrushers', '0'), 10) || 0;
   let dashSmashes = 0;         // obstacles shattered this dash (for big-dash trophy)
   const DASH_DUR = 14;
   function isDashing() { return dashFrames > 0; }
@@ -1514,6 +1515,7 @@
     { id: 'void_biome',    name: 'Dincolo de Lumină',     desc: 'Ajunge la biomul VOID',       reward: 500 },
     { id: 'mega_overdrive', name: 'MEGA OVERDRIVE',       desc: 'Declanșează MEGA OVERDRIVE',  reward: 250 },
     { id: 'prism_rift_clear', name: 'Prismatic',          desc: 'Supraviețuiește un PRISM RIFT', reward: 120 },
+    { id: 'crusher_10',    name: 'Sub Presă',              desc: 'Treci de 10 CRUSHER-e',        reward: 60 },
     { id: 'score_15000',   name: 'Maestru de 15K',         desc: 'Atinge 15.000 scor',           reward: 400 },
     { id: 'score_25000',   name: 'Imperiu',                desc: 'Atinge 25.000 scor',           reward: 600 },
     { id: 'score_50000',   name: 'Mit Viu',                desc: 'Atinge 50.000 scor',           reward: 1200 }
@@ -2885,6 +2887,18 @@
     else if (t === 'tall')    obstacles.push({ type: t, x, y: GROUND - 80, w: 32, h: 80 });
     else if (t === 'flying')  obstacles.push({ type: t, x, y: GROUND - 140, w: 56, h: 32, baseY: GROUND - 140, bobAmp: 18 + rnd() * 12, bobPh: rnd() * 6.28, bobSp: 0.05 + rnd() * 0.02 });
     else if (t === 'overhang')obstacles.push({ type: t, x, y: GROUND - 80, w: 46, h: 50 });
+    // CRUSHER — piston head hanging from the sky on a 150-frame cycle:
+    // raised (run under) → telegraph shake → SLAM → grounded (jump over) → rise.
+    // Dual-solution by design: both timings are valid plays.
+    else if (t === 'crusher') obstacles.push({ type: t, x, y: GROUND - 164, w: 46, h: 44, ph: Math.floor(rnd() * 150) });
+  }
+  // Crusher cycle position helper — returns the head's top Y for cycle time t
+  function crusherY(t) {
+    const RAISED = GROUND - 164, DOWN = GROUND - 44;
+    if (t < 80) return RAISED;                       // raised + telegraph window
+    if (t < 86) return RAISED + (DOWN - RAISED) * ((t - 80) / 6);  // slam (6f)
+    if (t < 128) return DOWN;                        // grounded — jump over
+    return DOWN + (RAISED - DOWN) * ((t - 128) / 22); // slow rise
   }
 
   // Telegraphed, hand-designed obstacle PATTERNS — fair & learnable, not random.
@@ -2927,7 +2941,11 @@
     { id: 'dash_corridor', minScore: 2200, span: 360, obs: [{ t: 'spike', dx: 0 }, { t: 'spike', dx: 90 }, { t: 'spike', dx: 180 }, { t: 'spike', dx: 270 }, { t: 'spike', dx: 360 }], coins: { dx: 100, arc: true } },
     { id: 'dash_blocks',   minScore: 2600, span: 280, obs: [{ t: 'block', dx: 0 }, { t: 'block', dx: 140 }, { t: 'block', dx: 280 }], coins: { dx: 80, arc: true } },
     { id: 'high_low_high', minScore: 1700, span: 520, obs: [{ t: 'overhang', dx: 0 }, { t: 'spike', dx: 260 }, { t: 'overhang', dx: 520 }], coins: { dx: 260, lowArc: true } },
-    { id: 'flyer_tunnel',  minScore: 2900, span: 800, obs: [{ t: 'flying', dx: 0 }, { t: 'flying', dx: 200 }, { t: 'overhang', dx: 400 }, { t: 'flying', dx: 600 }, { t: 'flying', dx: 800 }], coins: { dx: 400, lowArc: true } }
+    { id: 'flyer_tunnel',  minScore: 2900, span: 800, obs: [{ t: 'flying', dx: 0 }, { t: 'flying', dx: 200 }, { t: 'overhang', dx: 400 }, { t: 'flying', dx: 600 }, { t: 'flying', dx: 800 }], coins: { dx: 400, lowArc: true } },
+    // CRUSHER patterns — vertical timing on top of the usual lateral reads.
+    { id: 'crusher_single', minScore: 1400, span: 0,   obs: [{ t: 'crusher', dx: 0 }], coins: { dx: 0, lowArc: true } },
+    { id: 'crusher_spike',  minScore: 2000, span: 300, obs: [{ t: 'crusher', dx: 0 }, { t: 'spike', dx: 300 }] },
+    { id: 'crusher_pair',   minScore: 2700, span: 380, obs: [{ t: 'crusher', dx: 0 }, { t: 'crusher', dx: 380 }], coins: { dx: 190, arc: true } }
   ];
 
   // Gem variant chooser — rare colour gems pay out multiplied stars + score.
@@ -3569,6 +3587,23 @@
       o.x -= wSpeed + (o.vx || 0) * wSlow;
       // Flyers gently bob on a sine path — adds life; stays within run-under clearance
       if (o.bobAmp) o.y = o.baseY + Math.sin(frame * o.bobSp + o.bobPh) * o.bobAmp;
+      // Crusher piston cycle — head position follows the 150-frame loop.
+      // Impact beat (dust + thud) the frame it bottoms out, if on-screen.
+      if (o.type === 'crusher') {
+        const t = (frame + o.ph) % 150;
+        o.y = crusherY(t);
+        o.cycleT = t;
+        if (t === 86 && o.x > -60 && o.x < W + 60) {
+          shake = Math.max(shake, 3);
+          addRing(o.x + o.w / 2, GROUND, 36, '255,120,160', 12);
+          for (let i = 0; i < 6; i++) {
+            const dir = i % 2 === 0 ? 1 : -1;
+            pushParticle(o.x + o.w / 2 + dir * 10, GROUND - 2,
+              dir * (1 + Math.random() * 2.5), -Math.random() * 1.2,
+              16, 'rgba(255,150,180,0.6)', Math.random() * 2 + 1);
+          }
+        }
+      }
     });
     obstacles = obstacles.filter((o) => o.x + o.w > -50);
     springs.forEach((s) => { s.x -= wSpeed; s.t += 0.15; if (s.used > 0) s.used--; });
@@ -3850,6 +3885,11 @@
       if (o.nearChecked) continue;
       if (o.x + o.w < pcx) {
         o.nearChecked = true;
+        // Crusher cleared alive — count toward the Sub Presă trophy
+        if (o.type === 'crusher') {
+          lifeCrushers++; writeLS(NS + 'lifeCrushers', lifeCrushers);
+          if (lifeCrushers >= 10 && !hasAch('crusher_10')) unlock('crusher_10');
+        }
         // NEMESIS bounce-back — every cleared obstacle pushes the shadow back
         if (nemesis && setpiece && setpiece.type === 'nemesis') {
           nemesis.x -= 28;
@@ -5864,6 +5904,57 @@
         ctx.beginPath();
         ctx.arc(cx2 + Math.cos(ang) * 6 - 2, cy2 + Math.sin(ang) * 4 - 2, 2.5, 0, Math.PI * 2);
         ctx.fill();
+      } else if (o.type === 'crusher') {
+        const t = o.cycleT || 0;
+        const telegraph = t >= 64 && t < 80;   // about to slam — warn
+        const slamming = t >= 80 && t < 92;    // mid-slam / just landed
+        // Jitter while telegraphing reads as the piston straining to fire
+        const jx = telegraph ? (Math.random() - 0.5) * 3 : 0;
+        // Rail from the sky down to the head
+        ctx.strokeStyle = 'rgba(255, 80, 140, 0.30)';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(o.x + o.w / 2, 0);
+        ctx.lineTo(o.x + o.w / 2, o.y);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 120, 170, 0.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(o.x + o.w / 2, 0);
+        ctx.lineTo(o.x + o.w / 2, o.y);
+        ctx.stroke();
+        // Danger glow during telegraph + slam
+        if (telegraph || slamming) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const gg = ctx.createRadialGradient(o.x + o.w / 2, o.y + o.h, 0, o.x + o.w / 2, o.y + o.h, 60);
+          gg.addColorStop(0, 'rgba(255,40,90,' + (telegraph ? 0.35 + Math.random() * 0.2 : 0.5) + ')');
+          gg.addColorStop(1, 'rgba(255,40,90,0)');
+          ctx.fillStyle = gg;
+          ctx.fillRect(o.x + o.w / 2 - 60, o.y + o.h - 60, 120, 120);
+          ctx.restore();
+        }
+        // Head block — dark metal with hot magenta frame
+        const hg = ctx.createLinearGradient(o.x, o.y, o.x, o.y + o.h);
+        hg.addColorStop(0, '#33101e');
+        hg.addColorStop(1, '#180810');
+        ctx.fillStyle = hg;
+        ctx.fillRect(o.x + jx, o.y, o.w, o.h);
+        ctx.strokeStyle = telegraph || slamming ? '#ff2a6e' : '#ff3d8e';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(o.x + jx + 1.5, o.y + 1.5, o.w - 3, o.h - 3);
+        // Hazard stripes on the face
+        ctx.strokeStyle = 'rgba(255,120,170,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < 3; i++) {
+          ctx.moveTo(o.x + jx + 6 + i * 13, o.y + o.h - 6);
+          ctx.lineTo(o.x + jx + 14 + i * 13, o.y + 6);
+        }
+        ctx.stroke();
+        // Bright crushing edge (bottom) — the dangerous face
+        ctx.fillStyle = 'rgba(255,180,210,0.95)';
+        ctx.fillRect(o.x + jx + 2, o.y + o.h - 4, o.w - 4, 3);
       } else if (o.type === 'overhang') {
         // SLIDE hazard — amber, distinct colour cues "go low"
         ctx.strokeStyle = 'rgba(255, 177, 61, 0.35)';
