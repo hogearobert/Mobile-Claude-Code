@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=148" />
+  <link rel="stylesheet" href="style.css?v=149" />
 </head>
 <body>
   <div id="app">
@@ -126,6 +126,17 @@
         <div class="end-row">
           <button id="shareBtn" class="btn ghost share" aria-label="Distribuie scorul">📤 DISTRIBUIE</button>
           <button id="retryBtn" class="btn secondary">REJOACĂ</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pauseOverlay" class="overlay">
+      <div class="panel">
+        <h1 class="title small">PAUZĂ</h1>
+        <div class="btn-stack">
+          <button id="resumeBtn" class="btn primary-cta">▶ CONTINUĂ</button>
+          <button id="pauseRetryBtn" class="btn secondary">↻ REÎNCEPE</button>
+          <button id="pauseHomeBtn" class="btn ghost">🏠 ACASĂ</button>
         </div>
       </div>
     </div>
@@ -242,7 +253,7 @@
 
   </div>
 
-  <script src="game.js?v=148"></script>
+  <script src="game.js?v=149"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

@@ -1982,12 +1982,39 @@
     const list = document.getElementById('achList');
     if (!list) return;
     list.innerHTML = '';
+    // Live progress (cur/goal) for countable locked trophies — seeing 34/100
+    // is a far stronger pull than a bare lock icon.
+    const achProgress = {
+      slam_master:     [lifeSlams, 100],
+      phase_lord:      [lifePhases, 25],
+      dash_master:     [lifeDashes, 50],
+      timewarp_master: [lifeTimewarps, 20],
+      crusher_10:      [lifeCrushers, 10],
+      coins_100:       [totalCoins, 100],
+      score_500:       [best, 500],
+      score_2000:      [best, 2000],
+      score_5000:      [best, 5000],
+      score_10000:     [best, 10000],
+      score_15000:     [best, 15000],
+      score_25000:     [best, 25000],
+      score_50000:     [best, 50000],
+      combo_10:        [bestCombo, 10],
+      combo_20:        [bestCombo, 20],
+      combo_50:        [bestCombo, 50]
+    };
     for (const a of ACHIEVEMENTS) {
       const unlocked = hasAch(a.id);
       const div = document.createElement('div');
       div.className = 'ach-item ' + (unlocked ? 'unlocked' : 'locked');
+      let progressHtml = '';
+      if (!unlocked && achProgress[a.id]) {
+        const [cur, goal] = achProgress[a.id];
+        const ratio = Math.min(1, Math.max(0, cur / goal));
+        progressHtml = '<div class="ach-prog"><div class="ach-prog-fill" style="transform:scaleX(' + ratio.toFixed(3) + ')"></div></div>' +
+          '<div class="ach-prog-num">' + Math.min(cur, goal) + ' / ' + goal + '</div>';
+      }
       div.innerHTML = '<div class="ach-icon">' + (unlocked ? '🏆' : '🔒') + '</div>' +
-        '<div class="ach-text"><div class="ach-name">' + a.name + '</div><div class="ach-desc">' + a.desc + '</div></div>';
+        '<div class="ach-text"><div class="ach-name">' + a.name + '</div><div class="ach-desc">' + a.desc + '</div>' + progressHtml + '</div>';
       list.appendChild(div);
     }
   }
@@ -2929,10 +2956,54 @@
       showScreen('home');
     });
   }
+  // Pause menu — DOM overlay with resume / restart / home actions, kept in
+  // sync with the canvas state by a single setPaused() helper.
+  const pauseOverlayEl = document.getElementById('pauseOverlay');
+  function setPaused(on) {
+    if (on && state === STATE.PLAY) {
+      state = STATE.PAUSED;
+      if (pauseBtn) pauseBtn.textContent = '▶';
+      if (pauseOverlayEl) pauseOverlayEl.classList.add('show');
+      music.pause();
+    } else if (!on && state === STATE.PAUSED) {
+      state = STATE.PLAY;
+      if (pauseBtn) pauseBtn.textContent = '⏸';
+      if (pauseOverlayEl) pauseOverlayEl.classList.remove('show');
+      inputGraceUntil = frame + 2;
+      music.resumePlay();
+    }
+  }
   if (pauseBtn) pauseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (state === STATE.PLAY) { state = STATE.PAUSED; pauseBtn.textContent = '▶'; music.pause(); }
-    else if (state === STATE.PAUSED) { state = STATE.PLAY; pauseBtn.textContent = '⏸'; inputGraceUntil = frame + 2; music.resumePlay(); }
+    setPaused(state === STATE.PLAY);
+  });
+  const resumeBtn = document.getElementById('resumeBtn');
+  if (resumeBtn) resumeBtn.addEventListener('click', () => { audio.resume(); setPaused(false); });
+  const pauseRetryBtn = document.getElementById('pauseRetryBtn');
+  if (pauseRetryBtn) pauseRetryBtn.addEventListener('click', () => {
+    audio.resume();
+    if (pauseOverlayEl) pauseOverlayEl.classList.remove('show');
+    if (pauseBtn) pauseBtn.textContent = '⏸';
+    state = STATE.MENU;            // startGame() expects a non-PAUSED state
+    if (dailyMode) { dailyMode = false; dailyRng = null; } // match retryBtn semantics
+    startGame();
+  });
+  const pauseHomeBtn = document.getElementById('pauseHomeBtn');
+  if (pauseHomeBtn) pauseHomeBtn.addEventListener('click', () => {
+    audio.resume();
+    if (pauseOverlayEl) pauseOverlayEl.classList.remove('show');
+    if (pauseBtn) pauseBtn.textContent = '⏸';
+    music.stop();
+    state = STATE.MENU;
+    const bn = document.getElementById('bottomNav'); if (bn) bn.classList.add('show');
+    showScreen('home');
+  });
+  // Desktop nicety: Escape / P toggles pause mid-run
+  window.addEventListener('keydown', (e) => {
+    if ((e.code === 'Escape' || e.code === 'KeyP') && (state === STATE.PLAY || state === STATE.PAUSED)) {
+      e.preventDefault();
+      setPaused(state === STATE.PLAY);
+    }
   });
 
   // Show daily streak banner on menu if a reward was processed at load
@@ -7036,37 +7107,11 @@
       ctx.restore();
     }
 
-    // Pause overlay — gentle dark scrim + branded title + resume hint, drawn
-    // straight on the canvas so we don't need a DOM layer. Keeps the playfield
-    // visible underneath so the player can plan their next move on resume.
+    // Pause scrim — light canvas darken under the DOM pause menu, keeping the
+    // playfield faintly visible so the player can plan their next move.
     if (state === STATE.PAUSED) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(7,9,26,0.62)';
+      ctx.fillStyle = 'rgba(7,9,26,0.45)';
       ctx.fillRect(0, 0, W, H);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      // Stacked pulse halos behind the title text. Uses wall-clock time so the
-      // halo keeps breathing even while gameplay `frame` is frozen.
-      const pulse = 0.85 + 0.15 * Math.sin(performance.now() * 0.003);
-      const cy = H * 0.42;
-      const halo = ctx.createRadialGradient(W / 2, cy, 0, W / 2, cy, 220 * pulse);
-      halo.addColorStop(0, 'rgba(255,61,240,' + (0.22 * pulse) + ')');
-      halo.addColorStop(0.5, 'rgba(25,240,255,' + (0.10 * pulse) + ')');
-      halo.addColorStop(1, 'rgba(25,240,255,0)');
-      ctx.fillStyle = halo;
-      ctx.fillRect(W / 2 - 240, cy - 240, 480, 480);
-      // Title
-      ctx.shadowColor = 'rgba(255,61,240,0.6)';
-      ctx.shadowBlur = 16;
-      ctx.font = 'bold 56px sans-serif';
-      ctx.fillStyle = '#fff';
-      ctx.fillText('PAUZĂ', W / 2, cy);
-      // Subtitle hint
-      ctx.shadowBlur = 0;
-      ctx.font = '600 14px sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.78)';
-      ctx.fillText('TAP PE  ▶  PENTRU A CONTINUA', W / 2, cy + 50);
-      ctx.restore();
     }
   }
 
@@ -7114,11 +7159,7 @@
   // Stays paused on return so the player resumes deliberately instead of
   // reappearing mid-obstacle and dying to a frame they never saw.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && state === STATE.PLAY) {
-      state = STATE.PAUSED;
-      if (pauseBtn) pauseBtn.textContent = '▶';
-      music.pause();
-    }
+    if (document.hidden && state === STATE.PLAY) setPaused(true);
   });
 
   // Prevent context menu / pinch zoom

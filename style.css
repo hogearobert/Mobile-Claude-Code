@@ -1141,6 +1141,20 @@ html, body {
 .ach-name { font-size: 12px; font-weight: 700; }
 .ach-desc { font-size: 10px; opacity: 0.65; }
 .ach-text { flex: 1; min-width: 0; text-align: left; }
+.ach-prog {
+  height: 4px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.ach-prog-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-yellow));
+  transform-origin: left center;
+}
+.ach-prog-num { font-size: 9px; opacity: 0.55; margin-top: 2px; letter-spacing: 0.4px; }
 
 /* Bottom Nav */
 .bottom-nav {
