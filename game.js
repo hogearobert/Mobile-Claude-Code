@@ -52,6 +52,18 @@
     crtCtx.fillRect(0, 0, cw, ch);
   }
 
+  // ---------- Reduced-motion accessibility ----------
+  // Players with the OS-level "reduce motion" preference get the same game
+  // with the violent camera work tamed: shake/zoom-punch clamped hard and
+  // the full-screen flash / chromatic glitch bars skipped. Gameplay timing
+  // (slow-mo, time-warp) is untouched — those are mechanics, not decoration.
+  let REDUCED_MOTION = false;
+  try {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    REDUCED_MOTION = mq.matches;
+    if (mq.addEventListener) mq.addEventListener('change', (e) => { REDUCED_MOTION = e.matches; });
+  } catch (_) {}
+
   // ---------- Adaptive performance mode ----------
   // Rolling frame-time average measured in the rAF loop. Sustained slow
   // frames (>26ms avg) switch perfMode on: bloom is skipped (the single most
@@ -184,6 +196,16 @@
         blip(900, 0.10, 'sawtooth', 0.18, 1800);
         noise(0.12, 0.18, 5000);
         setTimeout(() => blip(1400, 0.06, 'sine', 0.14, 2200), 40);
+      },
+      crusher() {
+        // Piston slam — short metallic thud: filtered noise crack + sub drop
+        noise(0.10, 0.22, 900);
+        blip(120, 0.18, 'sine', 0.22, 45);
+      },
+      laser() {
+        // Laser igniting — sharp descending zap, reads as "beam went hot"
+        blip(1500, 0.07, 'sawtooth', 0.14, 420);
+        setTimeout(() => blip(900, 0.05, 'square', 0.10, 500), 30);
       },
       toggle() {
         muted = !muted;
@@ -3806,6 +3828,8 @@
         o.cycleT = t;
         if (t === 86 && o.x > -60 && o.x < W + 60) {
           shake = Math.max(shake, 3);
+          // Slam thud only when the piston is close enough to matter
+          if (Math.abs(o.x - player.x) < 360 && audio.crusher) audio.crusher();
           addRing(o.x + o.w / 2, GROUND, 36, '255,120,160', 12);
           for (let i = 0; i < 6; i++) {
             const dir = i % 2 === 0 ? 1 : -1;
@@ -4014,6 +4038,9 @@
         // pulse phase: ON when (t + phase) % cycle < onFrames
         const ph = (ls.t + ls.phase) % ls.cycle;
         const onNow = ph < ls.onFrames;
+        // Ignition zap when a nearby beam (ahead of the player) goes hot —
+        // an audio telegraph on top of the visual charging dashes.
+        if (onNow && !ls._on && ls.x > pcx && ls.x - pcx < 380 && audio.laser) audio.laser();
         // record this laser's last-known on-state for the renderer to telegraph charge
         ls._on = onNow;
         if (!onNow) continue;
@@ -6835,6 +6862,11 @@
 
   function draw() {
     ctx.save();
+    // Reduced-motion: tame the camera before any of it is applied
+    if (REDUCED_MOTION) {
+      shake = Math.min(shake, 1.5);
+      zoomPunch = Math.min(zoomPunch, 0.015);
+    }
     // Camera zoom-punch (level up / impacts) — eases back each frame
     zoomPunch *= 0.86;
     if (zoomPunch > 0.002) {
@@ -7057,15 +7089,18 @@
       ctx.restore();
     }
 
-    // Full-screen white flash (level up / shield save / revive)
+    // Full-screen white flash (level up / shield save / revive).
+    // Reduced-motion: flash capped to a faint pulse instead of a blink.
     const flashAge = frame - flashFrame;
     if (flashAge >= 0 && flashAge < 14) {
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * (1 - flashAge / 14)) + ')';
+      const fa = (REDUCED_MOTION ? 0.16 : 0.55) * (1 - flashAge / 14);
+      ctx.fillStyle = 'rgba(255,255,255,' + fa + ')';
       ctx.fillRect(0, 0, W, H);
     }
-    // Chromatic glitch bars (on hit / shield save / game over)
+    // Chromatic glitch bars (on hit / shield save / game over) — skipped
+    // entirely under reduced motion (rapid full-width strobing).
     const glitchAge = frame - glitchFrame;
-    if (glitchAge >= 0 && glitchAge < 18) {
+    if (!REDUCED_MOTION && glitchAge >= 0 && glitchAge < 18) {
       const a = 1 - glitchAge / 18;
       ctx.globalCompositeOperation = 'screen';
       for (let i = 0; i < 4; i++) {

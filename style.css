@@ -868,6 +868,18 @@ html, body {
   border-radius: 50%;
   margin: 0 auto 8px;
   /* background + box-shadow setate inline via JS pentru fiecare skin */
+  animation: skinFloat 2.6s ease-in-out infinite;
+}
+/* Stagger the float per card so the grid breathes organically */
+.skin-card:nth-child(2n) .skin-preview { animation-delay: -0.9s; }
+.skin-card:nth-child(3n) .skin-preview { animation-delay: -1.7s; }
+.skin-card.equipped .skin-preview { animation: skinFloat 1.8s ease-in-out infinite; }
+@keyframes skinFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skin-preview, .skin-card.equipped .skin-preview { animation: none; }
 }
 .skin-name {
   font-size: 12px;
