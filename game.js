@@ -993,6 +993,7 @@
 
   // ---------- Mode & difficulty (2026 standards: dynamic difficulty + daily) ----------
   let dailyMode = false;
+  let practiceMode = false; // sandbox: no death, no persistence (onboarding)
   let dailyDate = '';
   let dailyBest = parseInt(readLS(SK.dailyBest, '0'), 10);
   let storedDailyDate = readLS(SK.dailyDate, '');
@@ -1619,6 +1620,7 @@
   })();
   function hasAch(id) { return achState[id] === true; }
   function unlock(id) {
+    if (practiceMode) return; // no trophy/coin farming in the invincible sandbox
     if (achState[id]) return;
     achState[id] = true;
     writeLS(achKey(id), '1');
@@ -1745,6 +1747,7 @@
     writeLS(NS + 'missions', JSON.stringify({ date: todayStr(), list: missions }));
   }
   function missionEvent(type, value) {
+    if (practiceMode) return; // no mission progress in the sandbox
     let any = false;
     for (const m of missions) {
       if (m.done) continue;
@@ -2439,9 +2442,11 @@
     setComboUI('');
     if (titleSubEl) {
       const mod = activeDailyMod();
-      titleSubEl.textContent = dailyMode
-        ? 'DAILY · ' + todayStr() + (mod ? ' · ' + mod.icon + ' ' + mod.name : '')
-        : '';
+      titleSubEl.textContent = practiceMode
+        ? '🎓 PRACTICĂ · fără moarte · fără scor'
+        : dailyMode
+          ? 'DAILY · ' + todayStr() + (mod ? ' · ' + mod.icon + ' ' + mod.name : '')
+          : '';
     }
     initParallax();
     initWeather();
@@ -2502,6 +2507,23 @@
   }
 
   function gameOver() {
+    // PRACTICE mode — no death. A lethal hit instead becomes a soft recovery:
+    // brief invuln + an upward lift so the orb separates from the hazard, plus
+    // a hit cue. Nothing is persisted (this never reaches the death/scoring
+    // path below), so practice can't farm coins, best, XP or trophies.
+    if (practiceMode) {
+      invincibleUntil = frame + 70;
+      player.vy = -8;
+      player.onGround = false;
+      player.sliding = false;
+      shake = Math.max(shake, 5);
+      flashFrame = frame;
+      slowmoFrames = Math.max(slowmoFrames, 8);
+      addRing(player.x + player.w / 2, player.y + player.h / 2, 90, '25,240,255', 22);
+      popText('PRACTICĂ — fără moarte', player.x + player.w / 2, player.y - 36, '#19f0ff', 1.0);
+      audio.hit && audio.hit();
+      return;
+    }
     state = STATE.OVER;
     score = Math.floor(score);
     shake = 18;
@@ -2843,11 +2865,12 @@
     });
   });
 
-  startBtn.addEventListener('click', () => { audio.resume(); dailyMode = false; dailyRng = null; startGame(); });
+  startBtn.addEventListener('click', () => { audio.resume(); dailyMode = false; dailyRng = null; practiceMode = false; startGame(); });
   retryBtn.addEventListener('click', () => {
     audio.resume();
     // Exit daily mode when retrying — daily is one-shot per day
     if (dailyMode) { dailyMode = false; dailyRng = null; }
+    practiceMode = false; // game-over retry is always a real run
     startGame();
   });
 
@@ -3005,6 +3028,15 @@
       howtoOverlay.classList.remove('show');
       showScreen('home');
     });
+    const practiceBtn = document.getElementById('practiceBtn');
+    if (practiceBtn) practiceBtn.addEventListener('click', () => {
+      audio.resume();
+      howtoOverlay.classList.remove('show');
+      dailyMode = false; dailyRng = null;
+      practiceMode = true;
+      startGame();
+      showTipOnce && showTipOnce('practice', '🎓 ANTRENAMENT', 'Nu poți muri — exersează liber. Pauză → Acasă pentru a ieși.');
+    });
   }
   // Pause menu — DOM overlay with resume / restart / home actions, kept in
   // sync with the canvas state by a single setPaused() helper.
@@ -3073,6 +3105,7 @@
 
   if (dailyBtn) dailyBtn.addEventListener('click', () => {
     audio.resume();
+    practiceMode = false;
     dailyMode = true;
     dailyRng = makeRng('glitchrun-daily-' + todayStr());
     startGame();
@@ -4454,7 +4487,7 @@
     dist += 1;
     // RECORD GATE — plant the flag ~2s before the distance where the best run
     // died, so the player watches their old limit physically arrive & fall.
-    if (!recordGateSpawned && !dailyMode && bestDist > 300 && dist >= bestDist - 130) {
+    if (!recordGateSpawned && !dailyMode && !practiceMode && bestDist > 300 && dist >= bestDist - 130) {
       recordGateSpawned = true;
       recordGate = { x: W + 60, crossed: false };
     }
@@ -4482,7 +4515,7 @@
     // Mid-run record celebration — fires the frame the player crosses their
     // previous best. Single-shot via the flag; only meaningful when there IS
     // a previous best (skip on the first-ever run).
-    if (!recordBrokenThisRun && !dailyMode && best > 0 && score > best) {
+    if (!recordBrokenThisRun && !dailyMode && !practiceMode && best > 0 && score > best) {
       recordBrokenThisRun = true;
       popText('🏆 RECORD NOU!', W / 2, GROUND - 240, '#ffe14a', 1.9);
       flashFrame = frame;
