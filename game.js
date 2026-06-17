@@ -2875,23 +2875,132 @@
   });
 
   // Share button — Web Share API on supported browsers, clipboard fallback
+  // Render a branded, portrait synthwave score card to an offscreen canvas.
+  // Resolves to a PNG Blob (or null on failure). Used by the share button so
+  // players post an actual image, not just text — the real viral hook.
+  function buildShareCard() {
+    return new Promise((resolve) => {
+      try {
+        const CW = 720, CH = 1280;
+        const c = document.createElement('canvas');
+        c.width = CW; c.height = CH;
+        const x = c.getContext('2d');
+        // Background sky gradient (current biome)
+        const bg = x.createLinearGradient(0, 0, 0, CH);
+        bg.addColorStop(0, palette.sky[0]);
+        bg.addColorStop(0.6, palette.sky[1]);
+        bg.addColorStop(1, palette.sky[2]);
+        x.fillStyle = bg; x.fillRect(0, 0, CW, CH);
+        // Synthwave sun
+        const sx = CW / 2, sy = 460, R = 150;
+        x.globalCompositeOperation = 'lighter';
+        const halo = x.createRadialGradient(sx, sy, R * 0.4, sx, sy, R * 3);
+        halo.addColorStop(0, 'rgba(' + palette.sunRGB + ',0.5)');
+        halo.addColorStop(1, 'rgba(' + palette.sunRGB + ',0)');
+        x.fillStyle = halo; x.fillRect(sx - R * 3, sy - R * 3, R * 6, R * 6);
+        x.globalCompositeOperation = 'source-over';
+        const body = x.createLinearGradient(0, sy - R, 0, sy + R);
+        body.addColorStop(0, '#fffbe6');
+        body.addColorStop(0.5, palette.sun);
+        body.addColorStop(1, 'rgba(' + palette.sunRGB + ',0.6)');
+        x.fillStyle = body; x.beginPath(); x.arc(sx, sy, R, 0, Math.PI * 2); x.fill();
+        x.fillStyle = palette.sky[0];
+        for (let i = 0; i < 6; i++) {
+          const by = sy + R * (0.12 + i * 0.13), dy = by - sy;
+          const w = Math.sqrt(Math.max(0, R * R - dy * dy)) * 2;
+          if (w < 4) continue;
+          x.fillRect(sx - w / 2, by, w, 5 + i);
+        }
+        // Skin orb sitting over the sun
+        const sk = currentSkin();
+        const og = x.createRadialGradient(sx - 22, sy - 22, 0, sx, sy, 70);
+        og.addColorStop(0, sk.core[0]); og.addColorStop(0.3, sk.core[1]);
+        og.addColorStop(0.7, sk.core[2]); og.addColorStop(1, sk.core[3]);
+        x.fillStyle = og; x.beginPath(); x.arc(sx, sy, 64, 0, Math.PI * 2); x.fill();
+        x.fillStyle = 'rgba(255,255,255,0.85)';
+        x.beginPath(); x.arc(sx - 20, sy - 22, 12, 0, Math.PI * 2); x.fill();
+        // Title
+        x.textAlign = 'center';
+        x.fillStyle = '#fff';
+        x.font = '900 92px -apple-system, "Segoe UI", sans-serif';
+        x.fillText('GLITCH RUN', CW / 2, 150);
+        // Big score
+        x.fillStyle = palette.sun;
+        x.font = '900 230px -apple-system, sans-serif';
+        x.fillText(String(score), CW / 2, 800);
+        x.fillStyle = 'rgba(255,255,255,0.7)';
+        x.font = '800 38px sans-serif';
+        x.fillText('SCOR', CW / 2, 856);
+        // Stat row
+        const earned = parseInt((finalCoinsEl && finalCoinsEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const stats = [
+          ['RECORD', String(best)],
+          ['BIOM', palette.name],
+          ['COMBO', 'x' + runMaxCombo],
+          ['★', '+' + earned]
+        ];
+        const colW = CW / stats.length;
+        for (let i = 0; i < stats.length; i++) {
+          const cxs = colW * i + colW / 2;
+          x.fillStyle = '#fff';
+          x.font = '900 46px sans-serif';
+          x.fillText(stats[i][1], cxs, 980);
+          x.fillStyle = 'rgba(255,255,255,0.55)';
+          x.font = '800 26px sans-serif';
+          x.fillText(stats[i][0], cxs, 1022);
+        }
+        // Pilot rank pill
+        x.fillStyle = 'rgba(255,255,255,0.85)';
+        x.font = '800 34px sans-serif';
+        x.fillText('NIVEL ' + pilotRank + ' · ' + rankTitle(pilotRank), CW / 2, 1110);
+        // Footer CTA
+        x.fillStyle = 'rgba(255,255,255,0.6)';
+        x.font = '700 30px sans-serif';
+        x.fillText('Poți să mă bați? 🌌', CW / 2, 1200);
+        if (c.toBlob) c.toBlob((b) => resolve(b), 'image/png');
+        else resolve(null);
+      } catch (_) { resolve(null); }
+    });
+  }
+
   const shareBtn = document.getElementById('shareBtn');
   if (shareBtn) shareBtn.addEventListener('click', async () => {
     audio.resume();
     const txt = '🌌 Am făcut ' + score + ' puncte în Glitch Run! Poți să mă bați?';
-    // Prefer the native share sheet when available. Treat ANY resolution of
-    // navigator.share (success or user-cancel via AbortError) as terminal —
-    // we must NOT fall through to clipboard, or cancelling the dialog will
-    // silently overwrite the clipboard and falsely toast 'Copiat!'.
-    if (navigator.share) {
-      try { await navigator.share({ title: 'Glitch Run', text: txt, url: location.href }); }
-      catch (_) { /* user cancelled or share failed — respect it, do nothing */ }
+    const url = location.href;
+    // 1) Best path — share the rendered image via the native sheet.
+    let file = null;
+    try {
+      const blob = await buildShareCard();
+      if (blob) file = new File([blob], 'glitch-run-' + score + '.png', { type: 'image/png' });
+    } catch (_) { file = null; }
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text: txt }); }
+      catch (_) { /* user cancelled — respect it */ }
       return;
     }
+    // 2) Text-only native share.
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Glitch Run', text: txt, url }); }
+      catch (_) { /* cancelled */ }
+      return;
+    }
+    // 3) No Web Share (desktop) — download the card so it's still shareable,
+    //    and copy the text to clipboard as a bonus.
+    if (file) {
+      try {
+        const dlUrl = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = dlUrl; a.download = file.name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(dlUrl), 4000);
+        showToast('Card salvat!', 'Imaginea cu scorul tău s-a descărcat');
+      } catch (_) { /* fall through to clipboard */ }
+    }
     try {
-      await navigator.clipboard.writeText(txt + ' ' + location.href);
-      showToast('Copiat!', 'Scorul tău e în clipboard — lipește unde vrei');
-    } catch (_) { showToast('Hmm', 'Browser-ul tău nu permite share automat'); }
+      await navigator.clipboard.writeText(txt + ' ' + url);
+      if (!file) showToast('Copiat!', 'Scorul tău e în clipboard — lipește unde vrei');
+    } catch (_) { if (!file) showToast('Hmm', 'Browser-ul tău nu permite share automat'); }
   });
 
   const muteBtn = document.getElementById('muteBtn');
