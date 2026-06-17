@@ -721,6 +721,7 @@
   // matches the world scroll, so the orb visually rolls "without slipping".
   // Pure visual; collision uses the unrotated circle.
   let groundRoll = 0;
+  let menuHopTimer = 40; // countdown to the next idle hop of the menu showcase orb
   let airframes = 0;
   let airTricks = 0;        // ground-obstacle dodges chained in the current airborne arc
   // Per-run telemetry shown on the game-over breakdown
@@ -3766,6 +3767,37 @@
     scrollX += speed;
     updateScenery();
     updateWeather();
+    // Live menu orb — the equipped skin idles on the attract scene, doing a
+    // gentle auto-hop every couple of seconds so the menu feels alive and
+    // showcases the cosmetic the player owns (first-impression polish).
+    if (state === STATE.MENU) {
+      player.vy += gravity * 0.85;
+      player.y += player.vy;
+      if (player.y + player.h >= GROUND) {
+        player.y = GROUND - player.h;
+        player.vy = 0;
+        player.onGround = true;
+      } else {
+        player.onGround = false;
+        player.rot += 0.12;
+      }
+      if (menuHopTimer-- <= 0 && player.onGround) {
+        player.vy = jumpV * (0.5 + Math.random() * 0.18); // small, varied hop
+        player.onGround = false;
+        menuHopTimer = 70 + Math.floor(Math.random() * 90);
+        // tiny launch puff
+        for (let i = 0; i < 5; i++) {
+          pushParticle(player.x + player.w / 2 + (Math.random() - 0.5) * 10, GROUND - 2,
+            (Math.random() - 0.5) * 2, -Math.random() * 1.4, 18,
+            'rgba(' + currentSkin().trail + ',0.6)', Math.random() * 2 + 1);
+        }
+      }
+      groundRoll += speed / 22;
+      player.trail.push({ x: player.x + player.w / 2, y: player.y + player.h / 2, life: 20 });
+      if (player.trail.length > 10) player.trail.shift();
+      player.trail.forEach((t) => t.life--);
+      player.trail = player.trail.filter((t) => t.life > 0);
+    }
     texts.forEach((t) => { t.y -= 0.8; t.life--; });
     texts = texts.filter((t) => t.life > 0);
     particles.forEach((p) => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--; });
