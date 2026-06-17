@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=150" />
+  <link rel="stylesheet" href="style.css?v=151" />
 </head>
 <body>
   <div id="app">
@@ -83,6 +83,10 @@
         <div class="settings-row">
           <button id="sfxToggle" class="chip-toggle" aria-label="Sunete">🔊 Sunete</button>
           <button id="musicToggle" class="chip-toggle" aria-label="Muzică">🎵 Muzică</button>
+          <button id="hapticToggle" class="chip-toggle" aria-label="Vibrații">📳 Vibrații</button>
+        </div>
+        <div class="settings-row">
+          <button id="cbToggle" class="chip-toggle" aria-label="Daltonism">👁 Daltonism</button>
           <button id="howtoBtn" class="chip-toggle" aria-label="Ghid">❓ Ghid</button>
         </div>
         <p class="hint">Funcționează offline. Adaugă pe ecran principal pentru experiență full-screen.</p>
@@ -253,7 +257,7 @@
 
   </div>
 
-  <script src="game.js?v=150"></script>
+  <script src="game.js?v=151"></script>
   <script>
     // Defensive: if a stale service worker is still installed from an earlier
     // build, unregister it so it can't keep serving cached content. Do NOT

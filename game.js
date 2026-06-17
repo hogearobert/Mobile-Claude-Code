@@ -559,6 +559,20 @@
   };
   function readLS(k, dflt) { try { return localStorage.getItem(k) ?? dflt; } catch (_) { return dflt; } }
   function writeLS(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+  // ---------- Haptics (single gated wrapper; toggle persists) ----------
+  // Every vibration in the game routes through here so one setting silences
+  // them all. Defaults on; cheap no-op when off or unsupported.
+  let hapticsOn = readLS(NS + 'haptics', '1') !== '0';
+  function haptic(pattern) {
+    if (!hapticsOn) return;
+    if (!navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch (_) {}
+  }
+  function setHaptics(on) { hapticsOn = !!on; writeLS(NS + 'haptics', on ? '1' : '0'); }
+  // Colorblind assist: draw a directional glyph above each obstacle telling
+  // you the required input (↑ jump · ↓ slide · ◇ dash-through · ⏱ time).
+  let cbAssist = readLS(NS + 'cbAssist', '0') === '1';
+  function setCbAssist(on) { cbAssist = !!on; writeLS(NS + 'cbAssist', on ? '1' : '0'); }
   // One-shot cleanup of the now-removed Ghost Runner persistence
   try { localStorage.removeItem('glitchrun.v1.ghostRun'); } catch (_) {}
   (function migrate() {
@@ -627,7 +641,7 @@
       addRing(W / 2, GROUND - 120, 300, '255,225,74', 50);
       addRing(W / 2, GROUND - 120, 220, '255,61,240', 40);
       flashFrame = frame;
-      if (navigator.vibrate) { try { navigator.vibrate([30, 60, 30, 60, 150]); } catch (_) {} }
+      haptic([30, 60, 30, 60, 150]);
     }
   }
 
@@ -805,7 +819,7 @@
     if (!hasAch('dash_first')) unlock('dash_first');
     if (lifeDashes >= 50 && !hasAch('dash_master')) unlock('dash_master');
     audio.dash ? audio.dash() : (audio.djump && audio.djump());
-    if (navigator.vibrate) { try { navigator.vibrate([8, 14, 22]); } catch (_) {} }
+    haptic([8, 14, 22]);
     shake = Math.max(shake, 6);
     zoomPunch = Math.max(zoomPunch, 0.045);
     flashFrame = frame;
@@ -891,7 +905,7 @@
     addRing(player.x + player.w / 2, player.y + player.h / 2, 380, '255,255,255', 60);
     addRing(player.x + player.w / 2, player.y + player.h / 2, 260, '255,61,240', 50);
     addRing(player.x + player.w / 2, player.y + player.h / 2, 180, '255,225,74', 40);
-    if (navigator.vibrate) { try { navigator.vibrate([60, 30, 60, 30, 60, 30, 250]); } catch (_) {} }
+    haptic([60, 30, 60, 30, 60, 30, 250]);
     audio.power && audio.power();
     audio.levelup && audio.levelup();
     music.duck && music.duck();
@@ -921,7 +935,7 @@
     music.duck();
     audio.power();
     audio.levelup();
-    if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20, 40, 70]); } catch (_) {} }
+    haptic([20, 40, 20, 40, 70]);
     missionEvent('overdrive');
     if (!hasAch('overdrive')) unlock('overdrive');
     for (let i = 0; i < 40; i++) {
@@ -1632,7 +1646,7 @@
       }
       flashFrame = frame;
       audio.power && audio.power();
-      if (navigator.vibrate) { try { navigator.vibrate([15, 30, 60]); } catch (_) {} }
+      haptic([15, 30, 60]);
     }
   }
   // ---------- Skins (cosmetic progression unlocked with stars) ----------
@@ -2496,7 +2510,7 @@
     if (music.setIntense) music.setIntense(false); // don't leak OVERDRIVE intensity into menu ambience
     audio.hit();
     setTimeout(() => audio.over(), 220);
-    if (navigator.vibrate) { try { navigator.vibrate([40, 60, 90]); } catch (_) {} }
+    haptic([40, 60, 90]);
     // Shatter burst — the orb dissolves into dozens of skin-tinted shards.
     // Doubles as a clear "you died HERE" cue and makes the final frame
     // memorable instead of just freezing.
@@ -2937,11 +2951,25 @@
   // muteBtn stays a master kill-switch for both.
   const sfxToggleEl = document.getElementById('sfxToggle');
   const musicToggleEl = document.getElementById('musicToggle');
+  const hapticToggleEl = document.getElementById('hapticToggle');
+  const cbToggleEl = document.getElementById('cbToggle');
   function refreshAudioChips() {
     if (sfxToggleEl) sfxToggleEl.classList.toggle('off', audio.isMuted());
     if (musicToggleEl) musicToggleEl.classList.toggle('off', music.isMuted());
+    if (hapticToggleEl) hapticToggleEl.classList.toggle('off', !hapticsOn);
+    if (cbToggleEl) cbToggleEl.classList.toggle('off', !cbAssist);
   }
   refreshAudioChips();
+  if (hapticToggleEl) hapticToggleEl.addEventListener('click', () => {
+    setHaptics(!hapticsOn);
+    refreshAudioChips();
+    if (hapticsOn) haptic(30); // confirmation buzz when turning it on
+  });
+  if (cbToggleEl) cbToggleEl.addEventListener('click', () => {
+    audio.resume();
+    setCbAssist(!cbAssist);
+    refreshAudioChips();
+  });
   if (sfxToggleEl) sfxToggleEl.addEventListener('click', () => {
     audio.resume();
     audio.toggle();
@@ -3339,7 +3367,7 @@
           pushParticle(W / 2, GROUND - 160, Math.cos(a) * v, Math.sin(a) * v, 110,
             col, Math.random() * 4 + 2);
         }
-        if (navigator.vibrate) { try { navigator.vibrate([40, 80, 40, 80, 40, 80, 400]); } catch (_) {} }
+        haptic([40, 80, 40, 80, 40, 80, 400]);
       } else if (palette.prism) {
         // PRISM is the new endgame cap — extra cinematic burst beyond ULTRA's.
         if (!hasAch('prism_biome')) unlock('prism_biome');
@@ -3356,7 +3384,7 @@
           pushParticle(W / 2, GROUND - 160, Math.cos(a) * v, Math.sin(a) * v, 95,
             'hsl(' + hue + ',95%,70%)', Math.random() * 4 + 2);
         }
-        if (navigator.vibrate) { try { navigator.vibrate([30, 60, 30, 60, 30, 60, 300]); } catch (_) {} }
+        haptic([30, 60, 30, 60, 30, 60, 300]);
       }
       // Final-biome milestone — extra spectacle when the player reaches the
       // very last biome (VOID), marking the absolute cap of the level
@@ -3374,7 +3402,7 @@
           pushParticle(W / 2, GROUND - 140, Math.cos(a) * v, Math.sin(a) * v, 80,
             ['#ff3df0', '#19f0ff', '#ffe14a', '#fff'][i & 3], Math.random() * 4 + 2);
         }
-        if (navigator.vibrate) { try { navigator.vibrate([20, 50, 20, 50, 200]); } catch (_) {} }
+        haptic([20, 50, 20, 50, 200]);
       }
     }
   }
@@ -3487,7 +3515,7 @@
         cx, GROUND - 70, '#ffe14a', 1.1 + destroyed * 0.12);
       audio.hit();
       audio.power();
-      if (navigator.vibrate) { try { navigator.vibrate([18, 24, 40]); } catch (_) {} }
+      haptic([18, 24, 40]);
       // Sideways shock dust along the ground
       for (let i = 0; i < 18; i++) {
         const dir = i % 2 === 0 ? 1 : -1;
@@ -3724,7 +3752,7 @@
           player.jumps = 0;
           airframes = 1;
           audio.power();
-          if (navigator.vibrate) { try { navigator.vibrate(25); } catch (_) {} }
+          haptic(25);
           shake = Math.max(shake, 4);
           addRing(s.x + s.w / 2, GROUND, 70, '255,255,255', 20);
           popText('LAUNCH!', s.x + s.w / 2, GROUND - 90, '#fff', 1.1);
@@ -4086,7 +4114,7 @@
             shake = Math.max(shake, 14);
             audio.hit();
             popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.4);
-            if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_) {} }
+            haptic(40);
             unlock('shield_save');
             break;
           }
@@ -4108,7 +4136,7 @@
             m.ttl = -100; m.impact = 0; // consume the meteor
             shake = Math.max(shake, 14); audio.hit();
             popText('SCUT!', pcx, pcy - 40, '#19f0ff', 1.4);
-            if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_) {} }
+            haptic(40);
             unlock('shield_save');
             break;
           }
@@ -4153,7 +4181,7 @@
             audio.trick && audio.trick(Math.min(airTricks - 2, 3));
             if (airTricks === 2 && !hasAch('trick_combo')) unlock('trick_combo');
             if (airTricks >= 4 && !hasAch('trick_pro')) unlock('trick_pro');
-            if (navigator.vibrate && airTricks >= 3) { try { navigator.vibrate([10, 20, 30]); } catch (_) {} }
+            if (airTricks >= 3) haptic([10, 20, 30]);
           }
         }
         const nx = o.x < pcx ? (pcx > o.x + o.w ? o.x + o.w : pcx) : o.x;
@@ -4239,7 +4267,7 @@
             addRing(c.x, c.y, 80, '255,225,74', 28);
             addFever(0.18);
             audio.power && audio.power();
-            if (navigator.vibrate) { try { navigator.vibrate([15, 30, 60]); } catch (_) {} }
+            haptic([15, 30, 60]);
             for (let i = 0; i < 26; i++) {
               const a = Math.random() * Math.PI * 2;
               const v = Math.random() * 7 + 2;
@@ -4272,7 +4300,7 @@
           if (combo >= 15) { flashFrame = frame; }
           if (combo >= 20) { slowmoFrames = Math.max(slowmoFrames, 8); zoomPunch = Math.max(zoomPunch, 0.05); }
           if (combo >= 30) { glitchFrame = frame; zoomPunch = Math.max(zoomPunch, 0.08); }
-          if (navigator.vibrate && combo >= 15) { try { navigator.vibrate([10, 20, 40]); } catch (_) {} }
+          if (combo >= 15) haptic([10, 20, 40]);
         }
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * Math.PI * 2;
@@ -4370,7 +4398,7 @@
             pushParticle(p.x, p.y, Math.cos(a) * v, Math.sin(a) * v, 55,
               ['#ffe14a','#ff3df0','#19f0ff','#fff'][i & 3], Math.random() * 3 + 1.5);
           }
-          if (navigator.vibrate) { try { navigator.vibrate([14, 22, 60]); } catch (_) {} }
+          haptic([14, 22, 60]);
           if (!hasAch('starburst_first')) unlock('starburst_first');
           missionEvent('starburst');
           showTipOnce('starburst', '★ STAR BURST', '4s de scor ×3 — adună tot ce poți!');
@@ -4444,7 +4472,7 @@
         zoomPunch = Math.max(zoomPunch, 0.06);
         addFever(0.20);
         audio.levelup && audio.levelup();
-        if (navigator.vibrate) { try { navigator.vibrate([20, 40, 120]); } catch (_) {} }
+        haptic([20, 40, 120]);
       }
       if (recordGate.x < -80) recordGate = null;
     }
@@ -4474,7 +4502,7 @@
         pushParticle(W / 2, GROUND - 110, Math.cos(a) * v, Math.sin(a) * v, 70,
           ['#ffe14a', '#ff3df0', '#19f0ff', '#fff'][i % 4], Math.random() * 4 + 2);
       }
-      if (navigator.vibrate) { try { navigator.vibrate([40, 80, 40, 80, 200]); } catch (_) {} }
+      haptic([40, 80, 40, 80, 200]);
     }
     // Score milestones — a celebratory beat + small star bonus every 2500 pts,
     // giving long runs rhythm independent of biome level-ups. One fire per
@@ -4491,7 +4519,7 @@
       addRing(W / 2, GROUND - 130, 240, '255,225,74', 40);
       addFever(0.15);
       audio.power && audio.power();
-      if (navigator.vibrate) { try { navigator.vibrate([20, 40, 80]); } catch (_) {} }
+      haptic([20, 40, 80]);
     }
     // Achievements (use >= because combo multipliers can skip exact values)
     if (score >= 500 && !hasAch('score_500')) unlock('score_500');
@@ -6349,6 +6377,30 @@
           ctx.fill();
         }
       }
+    }
+    // Colorblind-assist glyphs — a redundant, non-colour cue for the required
+    // input floats above each on-screen hazard. Spikes/blocks/tall = ↑ jump,
+    // flyers = ↑ jump (duck under is also fine, but jump reads safest),
+    // overhangs = ↓ slide, crushers = ↕ time-it. Only when enabled.
+    if (cbAssist) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 18px sans-serif';
+      for (const o of obstacles) {
+        if (o.x < -40 || o.x > W + 40) continue;
+        const glyph = o.type === 'overhang' ? '↓'
+                    : o.type === 'flying'   ? '↧'
+                    : o.type === 'crusher'  ? '↕'
+                    : '↑';
+        const gx = o.x + o.w / 2;
+        const gy = (o.type === 'overhang' || o.type === 'crusher') ? o.y + o.h + 18 : o.y - 16;
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillText(glyph, gx + 1, gy + 1);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(glyph, gx, gy);
+      }
+      ctx.restore();
     }
   }
 
