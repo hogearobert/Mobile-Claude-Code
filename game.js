@@ -1849,10 +1849,11 @@
       const div = document.createElement('div');
       div.className = 'skin-card' + (equipped ? ' equipped' : owned ? ' owned' : ' locked');
 
-      const previewEl = document.createElement('div');
+      const previewEl = document.createElement('canvas');
       previewEl.className = 'skin-preview';
-      previewEl.style.background = 'radial-gradient(circle at 30% 30%, ' + s.core[0] + ', ' + s.core[2] + ' 60%, ' + s.core[3] + ')';
-      previewEl.style.boxShadow = '0 0 20px ' + s.halo[0];
+      previewEl.width = 112;       // 56 logical * 2 for retina crispness
+      previewEl.height = 112;
+      previewEl._skin = s;          // stash skin ref for the shared animator
 
       const nameEl = document.createElement('div');
       nameEl.className = 'skin-name';
@@ -1909,6 +1910,94 @@
       grid.appendChild(div);
     }
     renderUpgrades();
+    startShopPreviewAnimator();
+  }
+
+  // Animate every skin-preview canvas with its own skin's real render. One
+  // shared rAF loop drives the whole grid (cheap), pauses when the shop
+  // overlay isn't visible and resumes automatically when it returns.
+  let _shopAnimT = 0;
+  let _shopRAF = 0;
+  function startShopPreviewAnimator() {
+    if (_shopRAF) return; // already running
+    function tick() {
+      _shopAnimT++;
+      const overlay = document.getElementById('shopOverlay');
+      const visible = overlay && overlay.classList.contains('show');
+      if (!visible) { _shopRAF = 0; return; } // self-suspends; renderShop re-arms
+      const previews = document.querySelectorAll('canvas.skin-preview');
+      previews.forEach((cv) => drawShopOrb(cv, cv._skin, _shopAnimT));
+      _shopRAF = requestAnimationFrame(tick);
+    }
+    _shopRAF = requestAnimationFrame(tick);
+  }
+  // Render one skin orb (halo + rotating ring + body + roll pip + highlight)
+  // onto a small preview canvas — same anatomy as drawPlayer() in miniature.
+  function drawShopOrb(cv, sk, t) {
+    if (!sk) return;
+    const x = cv.getContext('2d');
+    const W2 = cv.width, H2 = cv.height;
+    const cx = W2 / 2, cy = H2 / 2;
+    const R = W2 * 0.30;
+    x.clearRect(0, 0, W2, H2);
+    // Halo
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    const halo = x.createRadialGradient(cx, cy, R * 0.5, cx, cy, R * 2);
+    halo.addColorStop(0, sk.halo[0]);
+    halo.addColorStop(1, sk.halo[1].replace(/[\d.]+\)$/, '0)'));
+    x.fillStyle = halo;
+    x.fillRect(0, 0, W2, H2);
+    x.restore();
+    // Rotating ring
+    x.save();
+    x.translate(cx, cy);
+    x.rotate(t * 0.04);
+    x.strokeStyle = sk.ring;
+    x.lineWidth = 2;
+    x.beginPath();
+    x.ellipse(0, 0, R * 1.45, R * 0.5, 0, 0, Math.PI * 2);
+    x.stroke();
+    x.restore();
+    // Body
+    const pulse = 1 + Math.sin(t * 0.18) * 0.04;
+    let fill;
+    if (sk.id === 'prism') {
+      const hue = (t * 3) % 360;
+      const g = x.createRadialGradient(cx - R * 0.3, cy - R * 0.3, 0, cx, cy, R);
+      g.addColorStop(0, '#fff');
+      g.addColorStop(0.3, 'hsl(' + hue + ',95%,75%)');
+      g.addColorStop(0.7, 'hsl(' + (hue + 90) % 360 + ',95%,55%)');
+      g.addColorStop(1, 'hsl(' + (hue + 180) % 360 + ',95%,35%)');
+      fill = g;
+    } else {
+      const g = x.createRadialGradient(cx - R * 0.3, cy - R * 0.3, 0, cx, cy, R);
+      g.addColorStop(0, sk.core[0]);
+      g.addColorStop(0.3, sk.core[1]);
+      g.addColorStop(0.7, sk.core[2]);
+      g.addColorStop(1, sk.core[3]);
+      fill = g;
+    }
+    x.fillStyle = fill;
+    x.beginPath();
+    x.arc(cx, cy, R * pulse, 0, Math.PI * 2);
+    x.fill();
+    // Roll pip — orbits inside the body, clipped (cosmetic motion)
+    x.save();
+    x.beginPath();
+    x.arc(cx, cy, R * pulse, 0, Math.PI * 2);
+    x.clip();
+    const a = t * 0.10;
+    x.fillStyle = 'rgba(255,255,255,0.55)';
+    x.beginPath();
+    x.arc(cx + Math.cos(a) * R * 0.55, cy + Math.sin(a) * R * 0.55, R * 0.14, 0, Math.PI * 2);
+    x.fill();
+    x.restore();
+    // Specular highlight (upper-left)
+    x.fillStyle = 'rgba(255,255,255,0.85)';
+    x.beginPath();
+    x.arc(cx - R * 0.34, cy - R * 0.38, R * 0.18, 0, Math.PI * 2);
+    x.fill();
   }
 
   function renderUpgrades() {
