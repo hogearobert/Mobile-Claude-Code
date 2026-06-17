@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=153" />
+  <link rel="stylesheet" href="style.css?v=154" />
 </head>
 <body>
   <div id="app">
@@ -259,18 +259,17 @@
 
   </div>
 
-  <script src="game.js?v=153"></script>
+  <script src="game.js?v=154"></script>
   <script>
-    // Defensive: if a stale service worker is still installed from an earlier
-    // build, unregister it so it can't keep serving cached content. Do NOT
-    // register any new SW — we ship without one for now.
+    // Register the network-first service worker so the game genuinely works
+    // offline (and is installable to the home screen). Network-first means an
+    // online player always gets the freshest build — no stale-cache risk — and
+    // an offline player is served the last good copy. Registered after load so
+    // it never competes with the first paint.
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((regs) => {
-        regs.forEach((r) => r.unregister());
-      }).catch(() => {});
-      if (window.caches) {
-        caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
-      }
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
     }
   </script>
 </body>
