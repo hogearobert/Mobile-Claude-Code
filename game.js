@@ -72,6 +72,16 @@
   let perfMode = false;
   let perfAvgMs = 16.7;       // exponential moving average of frame delta
   let perfModeFrames = 0;     // frames since last mode flip (hysteresis)
+  // Manual graphics preference layered on top of the adaptive detector:
+  //   'auto' — trust perfMode (bloom drops only when frames actually struggle)
+  //   'high' — force full quality (bloom always on, adaptive override ignored)
+  //   'low'  — force reduced effects (bloom off, flat speed-lines) for max FPS
+  // Read directly from storage here since readLS()/NS aren't defined this early.
+  let gfxPref = (function () { try { return localStorage.getItem('glitchrun.v1.gfx') || 'auto'; } catch (_) { return 'auto'; } })();
+  if (gfxPref !== 'high' && gfxPref !== 'low') gfxPref = 'auto';
+  function setGfxPref(v) { gfxPref = v; try { localStorage.setItem('glitchrun.v1.gfx', v); } catch (_) {} }
+  // Single source of truth for "reduce visual effects this frame".
+  function lowGfx() { return gfxPref === 'low' || (gfxPref === 'auto' && perfMode); }
   function perfTrack(dt) {
     perfAvgMs += (dt - perfAvgMs) * 0.05;
     perfModeFrames++;
@@ -3085,13 +3095,24 @@
   const musicToggleEl = document.getElementById('musicToggle');
   const hapticToggleEl = document.getElementById('hapticToggle');
   const cbToggleEl = document.getElementById('cbToggle');
+  const gfxToggleEl = document.getElementById('gfxToggle');
+  const GFX_LABEL = { auto: 'Auto', high: 'High', low: 'Low' };
   function refreshAudioChips() {
     if (sfxToggleEl) sfxToggleEl.classList.toggle('off', audio.isMuted());
     if (musicToggleEl) musicToggleEl.classList.toggle('off', music.isMuted());
     if (hapticToggleEl) hapticToggleEl.classList.toggle('off', !hapticsOn);
     if (cbToggleEl) cbToggleEl.classList.toggle('off', !cbAssist);
+    if (gfxToggleEl) {
+      gfxToggleEl.textContent = '🎚 Grafică: ' + (GFX_LABEL[gfxPref] || 'Auto');
+      gfxToggleEl.classList.toggle('off', gfxPref === 'low');
+    }
   }
   refreshAudioChips();
+  if (gfxToggleEl) gfxToggleEl.addEventListener('click', () => {
+    audio.resume();
+    setGfxPref(gfxPref === 'auto' ? 'high' : gfxPref === 'high' ? 'low' : 'auto');
+    refreshAudioChips();
+  });
   if (hapticToggleEl) hapticToggleEl.addEventListener('click', () => {
     setHaptics(!hapticsOn);
     refreshAudioChips();
@@ -5221,8 +5242,8 @@
       const len = 40 + (seed % 90);
       const x = W - ((scrollX * (2.2 + (seed % 5) * 0.4) + seed * 9) % (W + 160));
       const a = intensity * (0.10 + (seed % 4) * 0.04);
-      if (perfMode) {
-        // Flat fill — skips a per-line gradient allocation on slow devices
+      if (lowGfx()) {
+        // Flat fill — skips a per-line gradient allocation on low-gfx
         ctx.fillStyle = 'rgba(' + palette.accent + ',' + (a * 0.7).toFixed(3) + ')';
       } else {
         const g = ctx.createLinearGradient(x, y, x + len, y);
@@ -7033,7 +7054,7 @@
   // Additively blend the blurred quarter-res frame back over the scene so every
   // bright neon source blooms. Strength swells hard during OVERDRIVE.
   function applyBloom() {
-    if (!bloomOK || perfMode) return; // skipped on slow devices (adaptive)
+    if (!bloomOK || lowGfx()) return; // skipped on low-gfx (manual or adaptive)
     const bw = bloomCanvas.width, bh = bloomCanvas.height;
     if (bw < 2 || bh < 2) return;
     try {

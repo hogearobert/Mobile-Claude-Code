@@ -7,12 +7,12 @@
 // offline" promise actually true. The cache name is version-stamped so each
 // deploy's activate step purges the previous build's entries. Bump VERSION
 // (and the ?v= query) in lockstep with the index.html cache-buster.
-const VERSION = 'glitchrun-154';
+const VERSION = 'glitchrun-155';
 const CORE = [
   './',
   './index.html',
-  './game.js?v=154',
-  './style.css?v=154',
+  './game.js?v=155',
+  './style.css?v=155',
   './manifest.json',
   './icons/icon-192.png'
 ];
